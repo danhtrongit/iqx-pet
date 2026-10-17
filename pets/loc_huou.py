@@ -393,3 +393,272 @@ def touchup(art):
     protect = (idx == out) | eyes | lettering | grow | (idx == W)
     protect[240:284, 296:356] = True       # nose and mouth
     despeckle(art, 3, protect)
+
+    polish(art, ref, lab)
+
+
+# ---------------------------------------------------------------------------
+# Second polish pass: antler ramp, eye details, nose/mouth, lettering, gap.
+# ---------------------------------------------------------------------------
+def flood(seed, allow):
+    """4-connected region of `allow` grown from seed=(x, y)."""
+    m = np.zeros_like(allow)
+    m[seed[1], seed[0]] = True
+    while True:
+        p = np.pad(m, 1)
+        g = (m | p[:-2, 1:-1] | p[2:, 1:-1] | p[1:-1, :-2] | p[1:-1, 2:]) & allow
+        if (g == m).all():
+            return m
+        m = g
+
+
+def fill_from_neighbours(idx, hole):
+    """Give every pixel in `hole` the most common colour among its settled 4-neighbours."""
+    hole = hole.copy()
+    h, w = idx.shape
+    while hole.any():
+        changed = False
+        for y, x in zip(*np.where(hole)):
+            nb = [idx[y + dy, x + dx] for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1))
+                  if 0 <= y + dy < h and 0 <= x + dx < w and not hole[y + dy, x + dx]
+                  and idx[y + dy, x + dx] != TRANSPARENT]
+            if nb:
+                idx[y, x] = max(sorted(set(nb)), key=nb.count)
+                hole[y, x] = False
+                changed = True
+        if not changed:
+            break
+
+
+def ramp_map(art, mask, L, colors):
+    """Map masked pixels to a lightness-ordered ramp by reference L* only."""
+    ids = np.array([art.color(c) for c in colors])
+    rl = rgb2lab(np.array(colors, np.float64))[:, 0]
+    k = np.abs(L[mask][:, None] - rl[None]).argmin(1)
+    art.idx[mask] = ids[k]
+
+
+def polish(art, ref, lab):
+    idx = art.idx
+    out = art.names["outline"]
+    L = lab[..., 0]
+    yy, xx = np.mgrid[0:512, 0:512]
+    px, py = xx + 0.5, yy + 0.5
+    solid = idx != TRANSPARENT
+    dark = np.array([sum(c) < 160 for c in art.palette] + [False])[idx]
+
+    # --- antlers: one clean golden ramp instead of shared fur tones -------------
+    # (the auto palette mixed fur oranges and creams into the antlers, which made
+    # them blotchy and too orange next to the original's mustard gold)
+    allow = solid & ~dark
+    lcut = py < 148 + (px - 231) * (138 - 148) / (257 - 231)   # base of the left antler
+    antler = flood((180, 50), allow & lcut & (xx < 262)) | flood((360, 60), allow & (yy < 150))
+    aramp = [(140, 88, 28), (171, 104, 24), (214, 138, 28), (233, 161, 38), (241, 203, 110), (246, 234, 196)]
+    # mapped by L* only (greyish anti-aliased edge pixels keep the ramp order),
+    # then majority-smoothed so the shading bands have clean edges
+    ramp_map(art, antler, L, aramp)
+    smooth_region(art, antler, aramp, 2)
+
+    # --- right eye: the white crescent between iris and lash, top part was taupe --
+    rbox = np.zeros((512, 512), bool)
+    rbox[202:246, 361:373] = True
+    rbox &= lab[..., 2] < 11            # the sclera is neutral; the cheek below is warm cream
+    white, lgrey = (250, 248, 246), (214, 211, 214)
+    idx[rbox & (L > 76)] = art.color(white)
+    idx[rbox & (L > 60) & (L <= 76)] = art.color(lgrey)
+
+    # --- catch-lights and the orange glint, re-placed from the reference ---------
+    W = art.color((255, 255, 255))
+    black = out
+    for (x0, y0, x1, y1) in ((260, 212, 274, 228), (345, 207, 358, 222)):
+        box = np.zeros((512, 512), bool)
+        box[y0:y1, x0:x1] = True
+        # old highlight and its grey fringe -> pupil black
+        hl = box & (np.isin(idx, [W, art.color((191, 181, 172)), art.color((250, 248, 246))]) | (L < 30))
+        idx[hl] = black
+    art.blit(266, 218, [".###.", "#####", "#####", "#####", "#####", ".###."], {"#": W})
+    art.blit(349, 213, [".##.", "####", "####", "####", ".##."], {"#": W})
+    # left-eye glint: a soft orange dot on dark-brown iris
+    gbox = np.zeros((512, 512), bool)
+    gbox[216:229, 243:256] = True
+    gbox &= ~np.isin(idx, [W, art.color((191, 181, 172)), art.color((250, 248, 246))])
+    requantize(art, lab, gbox, [black, (60, 27, 8), (112, 58, 10), (176, 108, 16)], smooth=1)
+    art.blit(246, 220, [
+        "..mmm..",
+        ".mBBBm.",
+        "dmBBBmd",
+        "dmBBBmd",
+        ".mmmmm.",
+        "..ddd..",
+    ], {"B": (248, 190, 82), "m": (214, 150, 62), "d": (166, 102, 40)})
+
+    # --- nose: re-mapped straight from the reference (crisp at this scale) -------
+    nbox = np.zeros((512, 512), bool)
+    nbox[243:260, 315:345] = True
+    nose = nbox & (((lab[..., 1] > 16) & (L < 84)) | (L < 50))
+    requantize(art, lab, nose, [(222, 150, 128), (212, 102, 78), (156, 64, 50), (70, 24, 17)], smooth=0)
+
+    # --- mouth: line, dark inner mouth and tongue from the reference -------------
+    mbox = np.zeros((512, 512), bool)
+    mbox[259:282, 300:350] = True
+    red = lab[..., 1] > 22
+    # old hand-drawn mouth -> cream first
+    creams = [(249, 238, 221), (248, 243, 235), (249, 235, 213), (249, 229, 195)]
+    old = mbox & (np.isin(idx, [out, art.color((212, 92, 86))]))
+    requantize(art, lab, old, creams, smooth=0)
+    line = mbox & ~red & (L < 56)
+    idx[line] = out
+    tongue = mbox & red & (L < 82) & (yy >= 268)
+    requantize(art, lab, tongue, [(150, 48, 46), (204, 78, 72), (226, 110, 100)], smooth=0)
+
+    # left-eye crescent: the warm grey fringe read as a grey ring; a lighter cool
+    # grey keeps the shading without the heavy edge
+    lbox = np.zeros((512, 512), bool)
+    lbox[200:262, 216:262] = True
+    idx[lbox & (idx == art.color((191, 181, 172)))] = art.color((208, 205, 210))
+
+    # --- "IQX": 3px strokes like the original (4px read too bold) ----------------
+    blue = art.color((9, 86, 203))
+    band = np.zeros((512, 512), bool)
+    band[312:335, 278:326] = True
+    letters = np.zeros((512, 512), bool)
+    letters[315:331, 282:285] = True                                    # I
+    d = np.hypot(px - 296.5, py - 323.5)
+    letters |= (d <= 8.4) & (d >= 5.4)                                  # O ring
+    letters |= seg_mask(idx.shape, [(301.5, 328.5), (305.2, 332.0)], 0.85)   # small Q tail
+    letters |= seg_mask(idx.shape, [(309.8, 315.6), (319.4, 330.4)], 1.45)   # X
+    letters |= seg_mask(idx.shape, [(318.6, 315.6), (309.0, 330.4)], 1.45)
+    letters &= band & (yy >= 315) & (yy <= 331)
+    stale = band & (idx == W) & ~letters
+    idx[stale] = blue
+    idx[letters] = W
+
+    # --- the soft gap between tail, scarf end and back: warm light grey ----------
+    # (on white the semi-transparent original reads as (195,180,178), not lavender)
+    gap = np.zeros((512, 512), bool)
+    gap[312:342, 168:200] = True
+    idx[gap & (idx == art.color((206, 198, 204)))] = art.color((214, 202, 198))
+    idx[gap & (idx == art.color((150, 140, 146)))] = art.color((168, 152, 148))
+
+    # --- scarf: map the blue ramp by lightness only ------------------------------
+    # (the Lab-nearest pass pushed L*20-30 blues to the darker step, so the flap
+    # and knot edges got a 5-9px navy band where the original has ~3px)
+    navy, dblue, mblue, blue_ = (13, 23, 57), (6, 36, 99), (5, 59, 154), (9, 86, 203)
+    lblue, pblue = (87, 142, 214), (167, 204, 240)
+    scarf = np.zeros((512, 512), bool)
+    scarf[280:362, 150:372] = True
+    scarf &= (lab[..., 2] < -12) & (ref[..., 3] >= 128) & (idx != TRANSPARENT)
+    scarf &= ~letters & (idx != W)
+    sramp = [navy, dblue, mblue, blue_, lblue, pblue]
+    ramp_map(art, scarf, L, sramp)
+    # the white letters' anti-aliased fringe came out as pale-blue specks
+    lb = np.zeros((512, 512), bool)
+    lb[312:335, 278:326] = True
+    idx[lb & scarf & np.isin(idx, [art.color(lblue), art.color(pblue)])] = art.color(blue_)
+    smooth_region(art, scarf, sramp, 1)
+    tuck = np.zeros((512, 512), bool)
+    tuck[332:343, 296:316] = True
+    idx[tuck & np.isin(idx, [art.color(lblue), art.color(pblue)])] = art.color(dblue)
+
+    # --- outline weight: peel the inner layer where the original is not dark -----
+    # The auto line art is 1-2px heavier than the original's (~3px soft) lines.
+    # An outline pixel is handed to the fill next to it when the reference there
+    # is lighter than L*30 and at least two more outline pixels lie behind it, so
+    # the dark core of every line stays.
+    peel_outline(art, L, 30.0)
+
+    # stray greys left in the antlers (anti-aliased edges of the old highlights)
+    antler2 = np.zeros((512, 512), bool)
+    antler2[10:152, 130:430] = True
+    plab = rgb2lab(np.array(art.palette, np.float64))
+    pc = np.hypot(plab[:, 1], plab[:, 2])
+    cur = np.clip(idx, 0, None)
+    stray = antler2 & (idx != TRANSPARENT) & (idx != out) & (pc[cur] < 22) & (plab[cur, 0] > 30) & (plab[cur, 0] < 85)
+    stray &= flood((180, 50), (idx != TRANSPARENT) & (idx != out) & (yy < 152)) | flood((360, 60), (idx != TRANSPARENT) & (idx != out) & (yy < 150))
+    fill_from_neighbours(idx, stray)
+
+    # --- tail bottom: grey/white stripes ran light-dark-light into the navy rim ---
+    tb = np.zeros((512, 512), bool)
+    tb[378:391, 122:152] = True
+    twhite, tslate = art.color((244, 239, 230)), art.color((56, 60, 81))
+    tnavy = art.color((17, 27, 61))
+    idx[tb & (idx == art.color((166, 158, 150)))] = twhite
+    below = shifted(idx, 1, 0, TRANSPARENT)
+    idx[tb & (idx == twhite) & np.isin(below, [tslate, tnavy])] = art.color((186, 184, 196))
+
+    # --- scarf knot: the glint is olive-gold with a green edge, not khaki --------
+    kb = np.zeros((512, 512), bool)
+    kb[326:342, 208:226] = True
+    khaki = art.color((159, 130, 65))
+    idx[kb & (idx == khaki)] = art.color((150, 134, 40))
+    idx[kb & (idx == art.color((150, 134, 40))) & (xx <= 214)] = art.color((104, 114, 60))
+
+    # --- stray gem-yellow specks in the chest beside the pendant ----------------
+    cb = np.zeros((512, 512), bool)
+    cb[368:392, 316:330] = True
+    plab = rgb2lab(np.array(art.palette, np.float64))
+    cur = np.clip(idx, 0, None)
+    yel = cb & (idx != TRANSPARENT) & (plab[cur, 2] > 70) & (idx != art.color((150, 95, 18)))
+    gemm = np.zeros_like(cb)
+    gcx, gty, ggy, gby, ghw = 304.5, 341.0, 366.5, 394.5, 19.5
+    gemm |= (py <= ggy) & (np.abs(px - gcx) <= ghw * (py - gty) / (ggy - gty))
+    gemm |= (py > ggy) & (np.abs(px - gcx) <= ghw * (gby - py) / (gby - ggy))
+    fill_from_neighbours(idx, yel & ~gemm)
+
+    # --- right inner ear: the fold stroke is a mid brown-orange, not dark brown --
+    eb = np.zeros((512, 512), bool)
+    eb[128:176, 360:392] = True
+    idx[eb & (idx == art.color((156, 68, 20)))] = art.color((190, 104, 46))
+
+    # --- final speck sweep for everything this pass touched ----------------------
+    # 1-2px islands (cream noise round the nose, lid-edge browns, dotted fold
+    # lines) fold into their neighbours; small deliberate details are protected.
+    protect = np.zeros((512, 512), bool)
+    protect[312:335, 278:326] = True                     # lettering
+    protect[217:225, 245:273] = True                     # glint + left catch-light
+    protect[212:219, 348:354] = True                     # right catch-light
+    protect[266:282, 308:336] |= np.isin(idx[266:282, 308:336], [art.color(c) for c in ((150, 48, 46), (204, 78, 72), (226, 110, 100))])   # tongue
+    protect |= gemm
+    protect |= (idx == out) & (yy > 258) & (yy < 282) & (xx > 298) & (xx < 352)   # mouth line
+    despeckle(art, 2, protect)
+
+
+def smooth_region(art, mask, colors, passes):
+    """Majority filter among `colors` inside mask (other colours neither vote nor change)."""
+    idx = art.idx
+    ids = [art.color(c) for c in colors]
+    ys, xs = np.where(mask)
+    sub = np.s_[ys.min() - 1:ys.max() + 2, xs.min() - 1:xs.max() + 2]
+    comp = np.full(idx[sub].shape, -1)
+    for i, v in enumerate(ids):
+        comp[idx[sub] == v] = i
+    comp = majority(comp, len(ids), passes)
+    m = mask[sub] & (comp >= 0)
+    idx[sub][m] = np.array(ids)[comp[m]]
+
+
+def shifted(a, dy, dx, fill):
+    """b[y, x] = a[y + dy, x + dx] (fill outside)."""
+    h, w = a.shape
+    b = np.full_like(a, fill)
+    ys, yd = slice(max(0, dy), h + min(0, dy)), slice(max(0, -dy), h + min(0, -dy))
+    xs, xd = slice(max(0, dx), w + min(0, dx)), slice(max(0, -dx), w + min(0, -dx))
+    b[yd, xd] = a[ys, xs]
+    return b
+
+
+def peel_outline(art, L, thresh):
+    idx = art.idx
+    out = art.names["outline"]
+    protect = np.zeros(idx.shape, bool)
+    protect[194:284, 206:380] = True     # eyes, nose, mouth: hand-tuned above
+    protect[312:336, 278:326] = True     # lettering
+    o = idx == out
+    new = idx.copy()
+    for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+        nb = shifted(idx, dy, dx, TRANSPARENT)
+        behind1 = shifted(o, -dy, -dx, False)
+        behind2 = shifted(o, -2 * dy, -2 * dx, False)
+        cand = o & (nb != out) & (nb != TRANSPARENT) & behind1 & behind2 & (L > thresh) & ~protect & (new == out)
+        new[cand] = nb[cand]
+    idx[:] = new
