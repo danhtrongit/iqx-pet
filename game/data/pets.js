@@ -10,54 +10,54 @@ window.IQX_PETS = [
     "stages": [
       {
         "rank": "Ấu thể",
-        "name": "Thanh Long",
+        "name": "Tiểu Thanh Long",
         "level": 1,
-        "desc": "",
+        "desc": "Rồng con nở ra từ dòng vốn nhỏ đầu tiên chảy vào thị trường. Chiếc khăn IQX giúp nó đánh hơi xem tiền đang chảy về đâu.",
         "skill": {
-          "name": "",
-          "desc": ""
+          "name": "Đánh Hơi Dòng Vốn",
+          "desc": "Dò ra mã có dòng tiền vào bất thường trong phiên, tăng 10% tốc độ cho cả đội."
         },
         "stats": {
-          "hp": 40,
-          "atk": 30,
+          "hp": 42,
+          "atk": 36,
           "def": 30,
-          "spd": 30
+          "spd": 55
         },
         "sprite": "sprites/thanh-long-1.png",
         "blink": "sprites/thanh-long-1-blink.png"
       },
       {
         "rank": "Trưởng thành",
-        "name": "Thanh Long (giai đoạn 2)",
+        "name": "Thanh Long Lưu Thủy",
         "level": 10,
-        "desc": "",
+        "desc": "Đôi sừng vàng nhú lên khi nó đọc được dòng tiền khối ngoại và tự doanh. Chiếc đuôi vây cuộn sóng, dẫn thanh khoản chảy theo ý mình.",
         "skill": {
-          "name": "",
-          "desc": ""
+          "name": "Xoáy Thủy Lưu",
+          "desc": "Cuộn dòng tiền thành xoáy nước, hút thanh khoản của đối thủ và gây sát thương theo khối lượng giao dịch."
         },
         "stats": {
-          "hp": 70,
-          "atk": 55,
-          "def": 55,
-          "spd": 55
+          "hp": 64,
+          "atk": 62,
+          "def": 50,
+          "spd": 76
         },
         "sprite": "sprites/thanh-long-2.png",
         "blink": "sprites/thanh-long-2-blink.png"
       },
       {
         "rank": "Thần thú",
-        "name": "Thanh Long (giai đoạn 3)",
+        "name": "Thanh Long Vương",
         "level": 25,
-        "desc": "",
+        "desc": "Vua của mọi dòng chảy. Long châu soi thấu từng dòng vốn lớn trước khi thị trường kịp phản ứng; rồng bay đến đâu, mây lành và thanh khoản hội tụ đến đó.",
         "skill": {
-          "name": "",
-          "desc": ""
+          "name": "Long Châu Hội Lưu",
+          "desc": "Long châu gom mọi dòng vốn lớn thành cột nước thần, gây sát thương diện rộng và đánh dấu điểm gom hàng của cá mập."
         },
         "stats": {
-          "hp": 100,
-          "atk": 85,
-          "def": 85,
-          "spd": 85
+          "hp": 86,
+          "atk": 90,
+          "def": 72,
+          "spd": 95
         },
         "sprite": "sprites/thanh-long-3.png",
         "blink": "sprites/thanh-long-3-blink.png"
@@ -74,54 +74,54 @@ window.IQX_PETS = [
     "stages": [
       {
         "rank": "Ấu thể",
-        "name": "Lộc Hươu",
+        "name": "Tiểu Lộc",
         "level": 1,
-        "desc": "",
+        "desc": "Chú hươu con tò mò với đôi tai thính, lặng lẽ dỏng tai nghe ngóng mỗi lần ban lãnh đạo mua hay bán cổ phiếu của chính công ty mình.",
         "skill": {
-          "name": "",
-          "desc": ""
+          "name": "Dỏng Tai Nghe Ngóng",
+          "desc": "Bắt tín hiệu giao dịch của ban lãnh đạo và người có liên quan, báo ngay cho chủ nhân."
         },
         "stats": {
-          "hp": 40,
-          "atk": 30,
+          "hp": 38,
+          "atk": 28,
           "def": 30,
-          "spd": 30
+          "spd": 52
         },
         "sprite": "sprites/loc-huou-1.png",
         "blink": "sprites/loc-huou-1-blink.png"
       },
       {
         "rank": "Trưởng thành",
-        "name": "Lộc Hươu (giai đoạn 2)",
+        "name": "Kim Lộc",
         "level": 10,
-        "desc": "",
+        "desc": "Gạc vàng đâm chồi lộc non mỗi khi người trong cuộc âm thầm gom hàng; những đốm sáng trên lưng khắc ghi từng giao dịch của cổ đông lớn.",
         "skill": {
-          "name": "",
-          "desc": ""
+          "name": "Gạc Vàng Đâm Chồi",
+          "desc": "Khi nội bộ mua vào, gạc nảy lộc: cả đội tăng 20% độ chính xác tín hiệu trong 3 lượt."
         },
         "stats": {
-          "hp": 70,
+          "hp": 62,
           "atk": 55,
-          "def": 55,
-          "spd": 55
+          "def": 50,
+          "spd": 74
         },
         "sprite": "sprites/loc-huou-2.png",
         "blink": "sprites/loc-huou-2-blink.png"
       },
       {
         "rank": "Thần thú",
-        "name": "Lộc Hươu (giai đoạn 3)",
+        "name": "Thần Lộc Thiên Nhãn",
         "level": 25,
-        "desc": "",
+        "desc": "Thần thú mang Thiên Nhãn giữa trán, nhìn thấu mọi giao dịch nội bộ trước khi thị trường kịp hay biết. Con mắt thứ ba ấy không bao giờ khép lại.",
         "skill": {
-          "name": "",
-          "desc": ""
+          "name": "Thiên Nhãn Khai Mở",
+          "desc": "Soi thấu toàn bộ giao dịch của người trong cuộc, lật tẩy đợt xả hàng ngầm: đối thủ bị lộ diện mất 30% phòng thủ."
         },
         "stats": {
-          "hp": 100,
-          "atk": 85,
-          "def": 85,
-          "spd": 85
+          "hp": 86,
+          "atk": 82,
+          "def": 72,
+          "spd": 95
         },
         "sprite": "sprites/loc-huou-3.png",
         "blink": "sprites/loc-huou-3-blink.png"
@@ -138,54 +138,54 @@ window.IQX_PETS = [
     "stages": [
       {
         "rank": "Ấu thể",
-        "name": "Phụng Hoàng",
+        "name": "Tiểu Phụng",
         "level": 1,
-        "desc": "",
+        "desc": "Chú phượng non nở từ tro tàn của bản tin sáng, mắt hổ phách dõi theo từng dòng tít. Tin vừa lên sóng là Tiểu Phụng đã ríu rít báo cả bầy.",
         "skill": {
-          "name": "",
-          "desc": ""
+          "name": "Tia Lửa Tin Nóng",
+          "desc": "Phóng một đốm lửa đánh dấu tin mới nhất, cả đội phản ứng nhanh hơn 10% ở lượt kế tiếp."
         },
         "stats": {
-          "hp": 40,
-          "atk": 30,
-          "def": 30,
-          "spd": 30
+          "hp": 38,
+          "atk": 36,
+          "def": 26,
+          "spd": 46
         },
         "sprite": "sprites/phung-hoang-1.png",
         "blink": "sprites/phung-hoang-1-blink.png"
       },
       {
         "rank": "Trưởng thành",
-        "name": "Phụng Hoàng (giai đoạn 2)",
+        "name": "Hỏa Phụng",
         "level": 10,
-        "desc": "",
+        "desc": "Cánh lửa đã xòe rộng, mào lửa vút cao. Hỏa Phụng lướt qua nghìn nguồn tin mỗi phút và thiêu rụi tin đồn trước khi nó kịp lan.",
         "skill": {
-          "name": "",
-          "desc": ""
+          "name": "Lửa Thanh Lọc",
+          "desc": "Quét một luồng lửa qua chiến trường, xóa hiệu ứng tin đồn của đối thủ và gây bỏng trong 2 lượt."
         },
         "stats": {
-          "hp": 70,
-          "atk": 55,
-          "def": 55,
-          "spd": 55
+          "hp": 62,
+          "atk": 66,
+          "def": 44,
+          "spd": 74
         },
         "sprite": "sprites/phung-hoang-2.png",
         "blink": "sprites/phung-hoang-2-blink.png"
       },
       {
         "rank": "Thần thú",
-        "name": "Phụng Hoàng (giai đoạn 3)",
+        "name": "Thần Hỏa Phượng Hoàng",
         "level": 25,
-        "desc": "",
+        "desc": "Thần điểu đội vương miện vàng, sải cánh lửa che kín trời, tái sinh sau mọi cơn bão tin. Tiếng hót của Người báo trước biến động lớn của thị trường.",
         "skill": {
-          "name": "",
-          "desc": ""
+          "name": "Niết Bàn Thần Hỏa",
+          "desc": "Hóa biển lửa thiêng soi rõ mọi dòng tin: tái sinh đầy máu một lần mỗi trận, cả đội tăng 30% công trong 3 lượt."
         },
         "stats": {
-          "hp": 100,
-          "atk": 85,
-          "def": 85,
-          "spd": 85
+          "hp": 86,
+          "atk": 95,
+          "def": 68,
+          "spd": 97
         },
         "sprite": "sprites/phung-hoang-3.png",
         "blink": "sprites/phung-hoang-3-blink.png"
@@ -202,7 +202,7 @@ window.IQX_PETS = [
     "stages": [
       {
         "rank": "Ấu thể",
-        "name": "Kim Quy",
+        "name": "Tiểu Quy",
         "level": 1,
         "desc": "",
         "skill": {
@@ -210,17 +210,17 @@ window.IQX_PETS = [
           "desc": ""
         },
         "stats": {
-          "hp": 40,
-          "atk": 30,
-          "def": 30,
-          "spd": 30
+          "hp": 46,
+          "atk": 24,
+          "def": 44,
+          "spd": 18
         },
         "sprite": "sprites/kim-quy-1.png",
         "blink": "sprites/kim-quy-1-blink.png"
       },
       {
         "rank": "Trưởng thành",
-        "name": "Kim Quy (giai đoạn 2)",
+        "name": "Ngọc Quy",
         "level": 10,
         "desc": "",
         "skill": {
@@ -228,17 +228,17 @@ window.IQX_PETS = [
           "desc": ""
         },
         "stats": {
-          "hp": 70,
-          "atk": 55,
-          "def": 55,
-          "spd": 55
+          "hp": 72,
+          "atk": 48,
+          "def": 74,
+          "spd": 30
         },
         "sprite": "sprites/kim-quy-2.png",
         "blink": "sprites/kim-quy-2-blink.png"
       },
       {
         "rank": "Thần thú",
-        "name": "Kim Quy (giai đoạn 3)",
+        "name": "Kim Quy Thần Kiếm",
         "level": 25,
         "desc": "",
         "skill": {
@@ -246,10 +246,10 @@ window.IQX_PETS = [
           "desc": ""
         },
         "stats": {
-          "hp": 100,
-          "atk": 85,
-          "def": 85,
-          "spd": 85
+          "hp": 98,
+          "atk": 80,
+          "def": 96,
+          "spd": 42
         },
         "sprite": "sprites/kim-quy-3.png",
         "blink": "sprites/kim-quy-3-blink.png"

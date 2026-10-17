@@ -1,0 +1,1626 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Linh Thú IQX</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=VT323&display=swap">
+<style>
+/* Layout: a night-shrine arena (scene + command bar) on the left, HUD and evolution line on the right;
+   one column under 980px. Everything sits on a pixel grid of --px (3px desktop, 2px phone). */
+:root {
+  color-scheme: dark;
+  --night: #0c0a22;      /* page */
+  --ink: #07061a;        /* outlines, text on accent */
+  --panel: #17133b;      /* panel fill */
+  --panel-hi: #221c52;   /* raised fill */
+  --panel-top: #2c2468;  /* hover fill */
+  --line: #45399a;       /* pixel borders */
+  --text: #f4efff;
+  --muted: #a89ed9;
+  --gold: #ffd25e;       /* EXP, levels */
+  --hp: #ff5f7e; --atk: #ffa64d; --def: #62a8ff; --spd: #6ee7a8;
+  --acc: #22d3ee;        /* per pet, set from data */
+  --px: 3px;
+  --font-ui: "VT323", "Lucida Console", "Courier New", ui-monospace, monospace;
+  --font-display: "Bungee", "Arial Black", "Segoe UI Black", Impact, sans-serif;
+}
+@media (max-width: 640px) { :root { --px: 2px; } }
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { background: var(--night); -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; min-height: 100%;
+  background: var(--night) linear-gradient(180deg, #110d2c 0, var(--night) 420px) no-repeat;
+  color: var(--text);
+  font: 24px/1.2 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+}
+button { font: inherit; color: inherit; }
+img, canvas { max-width: none; }
+h1, h2, h3, p, ol { margin: 0; }
+ol { padding: 0; list-style: none; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* pixel frame: square ring with notched corners, built from four hard shadows */
+.pxb {
+  --bc: var(--line);
+  box-shadow:
+    0 calc(-1 * var(--px)) 0 0 var(--bc), 0 var(--px) 0 0 var(--bc),
+    calc(-1 * var(--px)) 0 0 0 var(--bc), var(--px) 0 0 0 var(--bc),
+    inset 0 var(--px) 0 0 rgba(255, 255, 255, .06), inset 0 calc(-1 * var(--px)) 0 0 rgba(0, 0, 0, .3);
+}
+
+.app {
+  max-width: 1260px; margin: 0 auto;
+  padding-block: 12px 32px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px;
+}
+
+/* ---------- buttons ---------- */
+.btn {
+  --bc: var(--line); --bg: var(--panel-hi); --fg: var(--text);
+  appearance: none; border: 0; margin: 0; cursor: pointer; position: relative;
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 10px 16px; font-size: 26px; line-height: 1; color: var(--fg); background: var(--bg);
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, .45);
+  box-shadow:
+    0 calc(-1 * var(--px)) 0 0 var(--bc), 0 var(--px) 0 0 var(--bc),
+    calc(-1 * var(--px)) 0 0 0 var(--bc), var(--px) 0 0 0 var(--bc),
+    inset 0 calc(-1 * var(--px)) 0 0 rgba(0, 0, 0, .45), inset 0 var(--px) 0 0 rgba(255, 255, 255, .14);
+  user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.btn:hover { --bg: var(--panel-top); }
+.btn:active:not(:disabled) {
+  transform: translateY(var(--px));
+  box-shadow:
+    0 calc(-1 * var(--px)) 0 0 var(--bc), 0 var(--px) 0 0 var(--bc),
+    calc(-1 * var(--px)) 0 0 0 var(--bc), var(--px) 0 0 0 var(--bc),
+    inset 0 var(--px) 0 0 rgba(0, 0, 0, .35);
+}
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+:focus-visible { outline: var(--px) solid var(--text); outline-offset: calc(var(--px) * 2); }
+.btn-acc { --bg: var(--acc); --fg: var(--ink); --bc: var(--text); text-shadow: none; }
+.btn-acc:hover { --bg: var(--acc); filter: brightness(1.12); }
+.btn-gold { --bg: #3a2a10; --fg: var(--gold); --bc: #8a6420; }
+.btn-gold:hover { --bg: #4a3614; }
+.btn-sm { font-size: 22px; padding: 8px 12px; gap: 8px; }
+.btn-xs { font-size: 20px; padding: 5px 10px; }
+.btn kbd {
+  position: absolute; top: 3px; right: 5px;
+  font: inherit; font-size: 16px; line-height: 1; color: inherit; opacity: .55; text-shadow: none;
+}
+@media (hover: none), (max-width: 700px) { .btn kbd { display: none; } }
+
+.ico { display: inline-block; flex: none; line-height: 0; }
+.ico svg { display: block; width: calc(var(--w) * var(--px)); height: calc(var(--h) * var(--px)); }
+
+/* ---------- header ---------- */
+.top { display: flex; align-items: center; gap: 14px 22px; flex-wrap: wrap; }
+.logo {
+  display: flex; align-items: center; gap: 12px; flex: none;
+  font: 400 30px/1 var(--font-display); letter-spacing: .01em; color: var(--text);
+  text-shadow: 3px 3px 0 var(--ink), 0 3px 0 var(--ink);
+}
+.logo b { font-weight: 400; color: var(--acc); }
+.logo small { display: block; font: 20px/1 var(--font-ui); color: var(--muted); letter-spacing: .04em; text-shadow: none; margin-top: 6px; }
+.sys { display: flex; gap: 14px; margin-left: auto; }
+#soundBtn[aria-pressed="false"] { --fg: var(--muted); }
+
+/* roster */
+.roster { display: flex; gap: 14px; flex-wrap: nowrap; }
+.slot {
+  --c: var(--line); --bc: var(--line);
+  appearance: none; border: 0; cursor: pointer; position: relative;
+  display: flex; align-items: center; gap: 10px; padding: 6px 12px 6px 6px; min-width: 0;
+  background: var(--panel); color: var(--text); text-align: left;
+  box-shadow:
+    0 calc(-1 * var(--px)) 0 0 var(--bc), 0 var(--px) 0 0 var(--bc),
+    calc(-1 * var(--px)) 0 0 0 var(--bc), var(--px) 0 0 0 var(--bc),
+    inset 0 calc(-1 * var(--px)) 0 0 rgba(0, 0, 0, .35);
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.slot:hover { background: var(--panel-hi); }
+.slot[aria-pressed="true"] { --bc: var(--c); background: color-mix(in srgb, var(--c) 16%, var(--panel)); }
+@keyframes nudge { 50% { transform: translateY(calc(var(--px) * -1)); } }
+.slot .pic { width: 56px; height: 56px; flex: none; overflow: hidden; background: rgba(0, 0, 0, .28); }
+.slot .pic img { width: 56px; height: 56px; object-fit: none; object-position: var(--pp, 50% 0); image-rendering: pixelated; display: block; }
+.slot .meta { display: grid; gap: 3px; min-width: 0; }
+.slot .nm { font-size: 21px; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slot .lv { font-size: 18px; line-height: 1; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.pips { display: inline-flex; gap: calc(var(--px) * 1); }
+.pips i { width: calc(var(--px) * 2); height: calc(var(--px) * 2); background: rgba(255, 255, 255, .16); }
+.pips i.on { background: var(--c, var(--acc)); }
+
+/* ---------- main grid ---------- */
+.game { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 26px; align-items: start; }
+.stage-col { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; container-type: inline-size; }
+.side { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; min-width: 0; }
+.statskill { container-type: inline-size; }
+
+/* ---------- arena ---------- */
+.arena-box { width: 100%; min-width: 0; }
+.arena {
+  --bc: #5a4cb4;
+  position: relative; margin-inline: auto; overflow: hidden; background: #0a0820;
+  width: var(--aw, 654px); height: var(--ah, 618px); max-width: 100%;
+  user-select: none; -webkit-user-select: none;
+}
+.scene { position: absolute; inset: 0; }
+.scene canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+#bg { z-index: 0; }
+#glow { z-index: 2; }
+.dim {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: 0;
+  background: radial-gradient(ellipse at 50% 58%, rgba(7, 6, 26, .2) 0, rgba(7, 6, 26, .78) 46%, rgba(7, 6, 26, .95) 80%);
+  transition: opacity .9s steps(9);
+}
+.arena.dimmed .dim { opacity: 1; }
+.pet-pos {
+  position: absolute; z-index: 3; pointer-events: none;
+  left: calc(var(--pl) * 1px); top: calc(var(--pt) * 1px);
+  width: calc(var(--s) * 192px); height: calc(var(--s) * 192px);
+}
+.pet-move { position: absolute; inset: 0; }
+.pet-move img {
+  position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated;
+  filter: brightness(1) invert(0) drop-shadow(0 0 0 transparent);
+}
+.pet-move img.off { visibility: hidden; }
+.pet-pos.sil img:not(.aura-img) { filter: brightness(0) invert(1) drop-shadow(0 0 calc(var(--s) * 3px) var(--acc)); }
+/* final form: a pixel-exact outline that follows the silhouette and flickers like flame */
+.pet-move img.aura-img { display: none; }
+.pet-pos.mythic:not(.sil) img.aura-img {
+  display: block;
+  --a1: color-mix(in srgb, var(--acc) 45%, #fff);
+  --o: calc(var(--s) * 1px);
+  filter:
+    drop-shadow(var(--o) 0 0 var(--a1)) drop-shadow(calc(var(--o) * -1) 0 0 var(--a1))
+    drop-shadow(0 var(--o) 0 var(--a1)) drop-shadow(0 calc(var(--o) * -1) 0 var(--a1))
+    drop-shadow(var(--o) 0 0 var(--acc)) drop-shadow(calc(var(--o) * -1) 0 0 var(--acc))
+    drop-shadow(0 calc(var(--o) * -1) 0 var(--acc)) drop-shadow(0 calc(var(--o) * -2) 0 color-mix(in srgb, var(--acc) 55%, transparent));
+  animation: flame .9s steps(1, end) infinite;
+}
+@keyframes flame {
+  0% { transform: translateY(0); opacity: 1; }
+  33% { transform: translateY(calc(var(--s) * -1px)); opacity: .9; }
+  66% { transform: translateY(0); opacity: .75; }
+}
+.pet-pos.sil-in img { transition: filter .6s steps(6); }
+.rm .pet-pos.xfade img { transition: opacity 1.6s ease-in-out; }
+#fx { z-index: 4; }
+.flash { position: absolute; inset: 0; z-index: 5; background: #fff; opacity: 0; pointer-events: none; }
+.flash.go { animation: flash .75s steps(6, end) forwards; }
+.flash.go.soft { animation: flash-soft .9s ease-out forwards; }
+.flash.tint { background: var(--acc); }
+.flash.tint.go { animation: flash-tint .32s steps(3, end) forwards; }
+@keyframes flash { 0% { opacity: 1; } 30% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes flash-soft { 0% { opacity: .55; } 100% { opacity: 0; } }
+@keyframes flash-tint { 0% { opacity: .55; } 100% { opacity: 0; } }
+
+.pet-hit {
+  position: absolute; z-index: 6; background: transparent; border: 0; padding: 0; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.pet-hit:focus-visible { outline: var(--px) dashed var(--text); outline-offset: 0; }
+
+.plate {
+  position: absolute; z-index: 6; left: calc(var(--s) * 4px); top: calc(var(--s) * 4px);
+  display: grid; gap: 4px; padding: 6px 10px 7px; pointer-events: none;
+  background: rgba(7, 6, 26, .72);
+  box-shadow: 0 0 0 calc(var(--s) * 1px) rgba(255, 255, 255, .12);
+}
+.plate-nm { font: 400 calc(var(--s) * 5px)/1 var(--font-display); color: var(--text); text-shadow: 2px 2px 0 var(--ink); white-space: nowrap; }
+.plate-lv { font-size: calc(var(--s) * 7px); line-height: .8; color: var(--gold); display: flex; align-items: center; gap: 8px; }
+
+.floaters { position: absolute; inset: 0; z-index: 7; pointer-events: none; overflow: hidden; }
+.floater {
+  position: absolute; transform: translate(-50%, -100%); white-space: nowrap;
+  font-size: calc(var(--s) * 10px); line-height: 1; color: var(--gold);
+  text-shadow: calc(var(--s) * 1px) calc(var(--s) * 1px) 0 var(--ink), calc(var(--s) * -1px) calc(var(--s) * 1px) 0 var(--ink), calc(var(--s) * 1px) calc(var(--s) * -1px) 0 var(--ink), calc(var(--s) * -1px) calc(var(--s) * -1px) 0 var(--ink);
+  animation: rise 1.3s steps(13, end) forwards;
+}
+.floater.big { font: 400 calc(var(--s) * 7px)/1 var(--font-display); color: var(--acc); }
+.floater.pink { color: #ff8fb4; }
+@keyframes rise {
+  0% { margin-top: 0; opacity: 1; }
+  70% { opacity: 1; }
+  77% { opacity: 0; } 84% { opacity: 1; } 92% { opacity: 0; }
+  100% { margin-top: calc(var(--s) * -16px); opacity: 0; }
+}
+
+.banner {
+  position: absolute; z-index: 7; left: 0; right: 0; top: 19%; display: flex; justify-content: center;
+  pointer-events: none; visibility: hidden;
+}
+.banner.go { visibility: visible; }
+.banner span {
+  font: 400 calc(var(--s) * 8px)/1 var(--font-display); letter-spacing: .02em; color: var(--ink);
+  background: var(--acc); padding: calc(var(--s) * 3px) calc(var(--s) * 8px) calc(var(--s) * 2px);
+  max-width: calc(100% - var(--s) * 12px); text-align: center; text-wrap: balance;
+  box-shadow: 0 calc(var(--s) * -1px) 0 0 var(--text), 0 calc(var(--s) * 1px) 0 0 var(--text), calc(var(--s) * -1px) 0 0 0 var(--text), calc(var(--s) * 1px) 0 0 0 var(--text), calc(var(--s) * 2px) calc(var(--s) * 3px) 0 0 var(--ink);
+}
+.banner.go span { animation: banner 1.7s steps(1, end) forwards; }
+@keyframes banner {
+  0% { transform: scaleX(0); } 4% { transform: scaleX(.4); } 8% { transform: scaleX(.85); } 12% { transform: scaleX(1.06); } 16% { transform: scaleX(1); }
+  84% { transform: scaleX(1); opacity: 1; } 88% { transform: scaleX(1.04); } 92% { transform: scaleX(.6) scaleY(.6); } 96% { transform: scaleX(.2) scaleY(.2); } 100% { transform: scaleX(0); opacity: 0; }
+}
+
+.skip { position: absolute; z-index: 9; top: calc(var(--s) * 4px); right: calc(var(--s) * 4px); }
+
+.dialog {
+  position: absolute; z-index: 8; left: calc(var(--s) * 4px); right: calc(var(--s) * 4px); bottom: calc(var(--s) * 4px);
+  min-height: calc(var(--s) * 30px); padding: 14px 52px 16px 20px; cursor: pointer;
+  background: #0e0b2c; color: var(--text);
+  box-shadow:
+    0 calc(var(--px) * -1) 0 0 var(--text), 0 var(--px) 0 0 var(--text), calc(var(--px) * -1) 0 0 0 var(--text), var(--px) 0 0 0 var(--text),
+    inset 0 0 0 var(--px) #0e0b2c, inset 0 0 0 calc(var(--px) * 2) var(--line),
+    calc(var(--px) * 2) calc(var(--px) * 3) 0 0 rgba(7, 6, 26, .8);
+  animation: pop .2s steps(2, end);
+}
+@keyframes pop { 0% { transform: scaleY(.2); } 100% { transform: scaleY(1); } }
+.dialog-text { font-size: 30px; line-height: 1.25; min-height: 2.5em; text-wrap: pretty; }
+.dialog-text .nm { color: var(--gold); }
+.dialog-text .nm-acc { color: var(--acc); }
+.dialog-next {
+  position: absolute; right: 14px; bottom: 12px; width: 34px; height: 30px; padding: 0; border: 0;
+  background: transparent; cursor: pointer; display: grid; place-items: center;
+}
+.dialog-next::before {
+  content: ""; width: calc(var(--px) * 5); height: calc(var(--px) * 3); background: var(--text);
+  clip-path: polygon(0 0, 100% 0, 100% 33.4%, 80% 33.4%, 80% 66.7%, 60% 66.7%, 60% 100%, 40% 100%, 40% 66.7%, 20% 66.7%, 20% 33.4%, 0 33.4%);
+  opacity: 0;
+}
+.dialog.ready .dialog-next::before { opacity: 1; animation: nudge .6s steps(1, end) infinite; }
+.dialog.auto .dialog-next { display: none; }
+
+.log {
+  display: flex; gap: 10px; align-items: baseline; min-height: 40px; padding: 8px 14px;
+  font-size: 23px; line-height: 1.1; color: var(--muted); background: var(--ink);
+}
+.log::before { content: ""; flex: none; width: calc(var(--px) * 2); height: calc(var(--px) * 3); background: var(--acc); transform: translateY(-2px); animation: caret 1s steps(1, end) infinite; }
+@keyframes caret { 50% { opacity: 0; } }
+.log b { color: var(--text); font-weight: 400; }
+#log { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.commands { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, .85fr); gap: 16px; }
+.commands .btn { padding: 10px 12px; min-height: 54px; font-size: 25px; gap: 8px; }
+.cmd .lbl { white-space: nowrap; }
+@container (max-width: 610px) {
+  .commands { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
+}
+
+/* ---------- side panels ---------- */
+.panel { background: var(--panel); padding: 18px 20px 20px; min-width: 0; }
+.panel h3 { font: 400 15px/1 var(--font-display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+
+.hud { display: grid; gap: 12px; }
+.tags { display: flex; gap: 10px; flex-wrap: wrap; }
+.chip { font-size: 21px; line-height: 1; padding: 4px 9px 3px; color: var(--ink); background: var(--acc); }
+.chip-layer { color: var(--acc); background: color-mix(in srgb, var(--acc) 14%, transparent); box-shadow: inset 0 0 0 calc(var(--px) * .67) color-mix(in srgb, var(--acc) 55%, transparent); }
+.chip-layer i { display: inline-block; width: calc(var(--px) * 2); height: calc(var(--px) * 2); background: var(--acc); margin-right: 6px; transform: translateY(-1px); }
+.pet-name {
+  font: 400 34px/1.08 var(--font-display); color: var(--text); text-wrap: balance;
+  text-shadow: 3px 3px 0 var(--ink);
+}
+.pet-name.mythic {
+  color: transparent; text-shadow: none;
+  background: linear-gradient(90deg, var(--acc) 0 30%, #fff 40%, var(--acc) 50% 80%, #fff 90%, var(--acc) 100%) 0 0 / 250% 100%;
+  -webkit-background-clip: text; background-clip: text;
+  filter: drop-shadow(3px 3px 0 var(--ink));
+  animation: shimmer 2.4s steps(12, end) infinite;
+}
+@keyframes shimmer { to { background-position: -150% 0; } }
+.desc { color: var(--muted); font-size: 23px; line-height: 1.15; max-width: 40ch; }
+
+.lvbox { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; align-items: center; margin-top: 4px; }
+.lvcard { display: grid; justify-items: center; padding: 6px 12px 4px; background: var(--ink); min-width: 78px; }
+.lv-k { font-size: 18px; line-height: 1; color: var(--muted); }
+.lv-v { font-size: 50px; line-height: .85; color: var(--gold); text-shadow: 3px 3px 0 #4a3510; }
+.expwrap { display: grid; gap: 6px; min-width: 0; }
+.exp-top { display: flex; justify-content: space-between; font-size: 20px; line-height: 1; color: var(--muted); }
+.exp-top b { color: var(--gold); font-weight: 400; }
+.next { font-size: 20px; line-height: 1; color: var(--muted); }
+.next b { color: var(--acc); font-weight: 400; }
+
+.meter { display: flex; gap: calc(var(--px) * .67); height: calc(var(--px) * 4); padding: calc(var(--px) * .67); background: var(--ink); }
+.meter i { flex: 1 1 0; background: rgba(255, 255, 255, .07); }
+.meter i.on { background: var(--mc, var(--acc)); box-shadow: inset 0 calc(var(--px) * .67) 0 0 rgba(255, 255, 255, .35); }
+.meter-exp { --mc: var(--gold); height: calc(var(--px) * 5); }
+
+.statskill { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .95fr); gap: 20px; }
+@container (max-width: 470px) {
+  .statskill > .stats, .statskill > .skill { grid-column: 1 / -1; }
+  .statskill > .skill { padding-left: 0; padding-top: 16px; box-shadow: inset 0 calc(var(--px) * .67) 0 0 var(--line); }
+}
+.stats { display: grid; gap: 9px; align-content: start; }
+.stats h3, .skill h3 { margin-bottom: 4px; }
+.stat { display: grid; grid-template-columns: 22px 48px minmax(0, 1fr) 36px; gap: 8px; align-items: center; font-size: 22px; line-height: 1; }
+.stat .ico { color: var(--mc); }
+.stat .val { text-align: right; color: var(--text); position: relative; }
+.stat .delta {
+  position: absolute; right: 0; bottom: 100%; font-size: 18px; color: var(--acc); white-space: nowrap;
+  animation: rise 2.2s steps(14, end) forwards;
+}
+.skill { display: grid; gap: 8px; align-content: start; padding-left: 18px; box-shadow: inset calc(var(--px) * .67) 0 0 0 var(--line); }
+.skill-name { display: flex; gap: 8px; align-items: center; font-size: 27px; line-height: 1; color: var(--acc); }
+.skill-desc { font-size: 21px; line-height: 1.15; color: var(--muted); }
+
+/* evolution line */
+.evo { display: grid; gap: 16px; container-type: inline-size; }
+.evo-line { --arrow-w: 30px; --pic-h: 168px; display: grid; grid-template-columns: minmax(0, 1fr) 30px minmax(0, 1fr) 30px minmax(0, 1fr); align-items: start; gap: 6px; }
+.form { display: grid; gap: 6px; justify-items: center; text-align: center; min-width: 0; }
+.form .pic {
+  position: relative; width: 100%; height: var(--pic-h); overflow: hidden;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .02), rgba(255, 255, 255, .05));
+  box-shadow: inset 0 calc(var(--px) * -2) 0 0 var(--line);
+}
+.form .pic img { width: 100%; height: 100%; object-fit: none; object-position: 50% 100%; image-rendering: pixelated; display: block; }
+.form.locked .pic img { filter: brightness(0) drop-shadow(1px 0 0 #5d50b8) drop-shadow(-1px 0 0 #5d50b8) drop-shadow(0 1px 0 #5d50b8) drop-shadow(0 -1px 0 #5d50b8); opacity: .9; }
+.form.locked.peek .pic img { filter: grayscale(.6) brightness(.55); opacity: 1; }
+.form .q {
+  position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%);
+  font: 400 40px/1 var(--font-display); color: var(--muted); text-shadow: 3px 3px 0 var(--ink);
+}
+.form.current .pic { background: color-mix(in srgb, var(--acc) 12%, transparent); box-shadow: inset 0 calc(var(--px) * -2) 0 0 var(--acc), inset 0 0 0 calc(var(--px) * .67) color-mix(in srgb, var(--acc) 45%, transparent); }
+.form .f-rank { font-size: 19px; line-height: 1; color: var(--muted); }
+.form.current .f-rank { color: var(--acc); }
+.form .f-name { font-size: 22px; line-height: 1.05; color: var(--text); overflow-wrap: anywhere; min-height: 2.1em; }
+.form.locked:not(.peek) .f-name { color: var(--muted); letter-spacing: .2em; }
+.form .f-lv { font-size: 19px; line-height: 1; color: var(--gold); }
+.form.unlock .pic { animation: unlock .9s steps(1, end); }
+@keyframes unlock { 0%, 22%, 44% { background: #fff; } 11%, 33%, 55% { background: transparent; } }
+.arrow { display: grid; justify-items: center; gap: 4px; margin-top: calc(var(--pic-h) / 2 - 12px); color: var(--line); }
+.arrow.lit { color: var(--acc); }
+.arrow span { font-size: 17px; line-height: 1; color: var(--muted); text-align: center; }
+
+@container (max-width: 470px) {
+  .evo-line { --arrow-w: 18px; --pic-h: 84px; gap: 4px; }
+  .form .pic img { object-position: var(--pp, 50% 0); }
+  .form .q { font-size: 28px; }
+  .arrow span { display: none; }
+  .form .f-name { font-size: 19px; }
+}
+
+.keys { font-size: 19px; color: var(--muted); text-align: center; }
+.keys kbd { font: inherit; color: var(--text); background: var(--panel-hi); padding: 1px 5px; }
+
+/* ---------- modal ---------- */
+.modal { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgba(7, 6, 26, .78); }
+.modal-box { --bc: #ff6b6b; width: min(440px, 100%); display: grid; gap: 14px; padding: 22px; }
+.modal-box h2 { font: 400 22px/1.1 var(--font-display); color: var(--text); }
+.modal-box p { color: var(--muted); font-size: 23px; line-height: 1.15; }
+.modal-row { display: flex; gap: 14px; justify-content: flex-end; flex-wrap: wrap; margin-top: 6px; }
+.btn-danger { --bg: #ff6b6b; --fg: var(--ink); --bc: var(--text); text-shadow: none; }
+.btn-danger:hover { --bg: #ff8585; }
+
+/* evolution: the rest of the screen steps back */
+.top, .side, .commands, .log, .keys { transition: opacity .6s steps(6), filter .6s steps(6); }
+body.evolving .top, body.evolving .side, body.evolving .commands, body.evolving .log, body.evolving .keys { opacity: .28; filter: saturate(.3); }
+
+.nodata { padding: 28px; font-size: 26px; line-height: 1.2; color: var(--text); background: var(--panel); }
+
+/* ---------- responsive ---------- */
+@media (max-width: 1439px) {
+  .sys .lbl { display: none; }
+  .sys .btn { padding: 10px 11px; }
+}
+@media (max-width: 1180px) {
+  .slot .meta { display: none; }
+  .slot { padding: 6px; }
+}
+@media (max-width: 979px) {
+  .game { grid-template-columns: minmax(0, 1fr); }
+  .side { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+  .side .evo { grid-column: 1 / -1; }
+  .statskill { grid-template-columns: minmax(0, 1fr); }
+  .skill { padding-left: 0; padding-top: 16px; box-shadow: inset 0 calc(var(--px) * .67) 0 0 var(--line); }
+  .roster { order: 3; width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .slot .meta { display: grid; }
+  .slot { padding: 6px 10px 6px 6px; }
+  .sys .lbl { display: inline; }
+}
+@media (max-width: 760px) {
+  .side { grid-template-columns: minmax(0, 1fr); }
+  .statskill { grid-template-columns: minmax(0, 1fr); }
+  .skill { padding-left: 0; padding-top: 16px; box-shadow: inset 0 calc(var(--px) * .67) 0 0 var(--line); }
+}
+@media (max-width: 640px) {
+  .app { gap: 14px; padding-block: 12px 24px; }
+  .logo { font-size: 22px; gap: 10px; }
+  .logo small { font-size: 17px; margin-top: 4px; }
+  .sys { gap: 10px; }
+  .sys .lbl { display: none; }
+  .btn-sm { padding: 8px 10px; }
+  .roster { gap: 10px; }
+  .slot { flex-direction: column; gap: 5px; padding: 5px 4px 6px; text-align: center; }
+  .slot .meta { justify-items: center; gap: 3px; width: 100%; }
+  .slot .nm { font-size: 18px; max-width: 100%; }
+  .slot .lv { font-size: 16px; }
+  .slot .pic, .slot .pic img { width: 48px; height: 48px; }
+  .commands .btn { font-size: 24px; min-height: 50px; }
+  .dialog { padding: 10px 40px 12px 14px; }
+  .dialog-text { font-size: 23px; }
+  .dialog-next { right: 8px; bottom: 6px; }
+  .panel { padding: 14px 14px 16px; }
+  .pet-name { font-size: 26px; }
+  .log { font-size: 20px; height: 58px; padding: 8px 12px; align-items: flex-start; }
+  .log::before { transform: translateY(7px); }
+  #log { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .keys { display: none; }
+}
+
+/* reduced motion: keep it calm */
+@media (prefers-reduced-motion: reduce) {
+  .dialog.ready .dialog-next::before, .log::before { animation: none; }
+  .pet-name.mythic { animation-duration: 8s; }
+  .pet-pos.mythic:not(.sil) img.aura-img { animation: none; }
+  .floater { animation: rise-rm 1.4s ease-out forwards; }
+  .banner.go span { animation: banner-rm 1.7s ease forwards; }
+  .flash.go { animation: flash-soft .9s ease-out forwards; }
+  .dim, .top, .side, .commands, .log { transition-timing-function: ease; }
+}
+@keyframes rise-rm { 0% { opacity: 0; } 15% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; margin-top: calc(var(--s) * -4px); } }
+@keyframes banner-rm { 0% { opacity: 0; } 12% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; } }
+</style>
+
+<div class="app" id="app">
+  <header class="top" id="top">
+    <h1 class="logo"><span class="ico" id="logoEgg" aria-hidden="true"></span><span><span>Linh Thú</span> <b>IQX</b><small>Nuôi · luyện · tiến hoá</small></span></h1>
+    <nav class="roster" id="roster" aria-label="Chọn linh thú"></nav>
+    <div class="sys">
+      <button class="btn btn-sm" id="soundBtn" type="button" aria-pressed="true"><span class="ico" id="soundIco" aria-hidden="true"></span><span class="lbl">Âm thanh</span></button>
+      <button class="btn btn-sm" id="resetBtn" type="button"><span class="ico" data-ico="reset" aria-hidden="true"></span><span class="lbl">Đặt lại</span></button>
+    </div>
+  </header>
+
+  <main class="game" id="game">
+    <section class="stage-col" aria-label="Sân linh thú">
+      <div class="arena-box" id="arenaBox">
+        <div class="arena pxb" id="arena">
+          <div class="scene" id="scene">
+            <canvas id="bg" width="218" height="206"></canvas>
+            <div class="dim" id="dim"></div>
+            <canvas id="glow" width="218" height="206"></canvas>
+            <div class="pet-pos" id="petPos">
+              <div class="pet-move" id="petMove">
+                <img id="petAura" class="aura-img" alt="" draggable="false">
+                <img id="petA" alt="" draggable="false">
+                <img id="petB" alt="" draggable="false" class="off">
+              </div>
+            </div>
+            <canvas id="fx" width="218" height="206"></canvas>
+            <div class="flash" id="flash"></div>
+          </div>
+          <button class="pet-hit" id="petHit" type="button" aria-label="Vuốt ve linh thú"></button>
+          <div class="plate" id="plate" aria-hidden="true"><span class="plate-nm" id="plateName"></span><span class="plate-lv"><span id="plateLv"></span><span class="pips" id="platePips"></span></span></div>
+          <div class="floaters" id="floaters" aria-hidden="true"></div>
+          <div class="banner" id="banner" aria-hidden="true"><span id="bannerText"></span></div>
+          <button class="btn btn-xs skip" id="skipBtn" type="button" hidden>Bỏ qua »</button>
+          <div class="dialog" id="dialog" role="dialog" aria-label="Thông báo" hidden>
+            <p class="dialog-text" id="dlgText" aria-hidden="true"></p>
+            <p class="sr-only" id="dlgLive" aria-live="assertive"></p>
+            <button class="dialog-next" id="dlgNext" type="button" aria-label="Tiếp tục"></button>
+          </div>
+        </div>
+      </div>
+      <p class="log" aria-live="polite"><span id="log"></span></p>
+      <div class="commands" id="commands">
+        <button class="btn cmd" id="feedBtn" type="button"><span class="ico" data-ico="food" aria-hidden="true"></span><span class="lbl">Cho ăn</span><kbd>A</kbd></button>
+        <button class="btn cmd" id="trainBtn" type="button"><span class="ico" data-ico="train" aria-hidden="true"></span><span class="lbl">Luyện tập</span><kbd>L</kbd></button>
+        <button class="btn btn-acc cmd" id="skillBtn" type="button"><span class="ico" data-ico="skill" aria-hidden="true"></span><span class="lbl">Dùng kỹ năng</span><kbd>K</kbd></button>
+        <button class="btn btn-gold cmd" id="lvBtn" type="button"><span class="ico" data-ico="up" aria-hidden="true"></span><span class="lbl">+5 cấp</span><kbd>+</kbd></button>
+      </div>
+    </section>
+
+    <aside class="side" id="side">
+      <section class="panel pxb hud" aria-labelledby="petName">
+        <div class="tags"><span class="chip" id="rankChip"></span><span class="chip chip-layer" id="layerTag"></span></div>
+        <h2 class="pet-name" id="petName"></h2>
+        <p class="desc" id="petDesc"></p>
+        <div class="lvbox">
+          <div class="lvcard"><span class="lv-k">Cấp</span><span class="lv-v" id="lvNum">1</span></div>
+          <div class="expwrap">
+            <div class="exp-top"><span>EXP</span><span id="expTxt"></span></div>
+            <div class="meter meter-exp" id="expBar" role="progressbar" aria-label="Kinh nghiệm" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+            <p class="next" id="nextEvo"></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel pxb statskill" aria-label="Chỉ số và kỹ năng">
+        <div class="stats" id="stats"><h3>Chỉ số</h3></div>
+        <div class="skill">
+          <h3>Kỹ năng</h3>
+          <p class="skill-name"><span class="ico" data-ico="skill" aria-hidden="true"></span><span id="skillName"></span></p>
+          <p class="skill-desc" id="skillDesc"></p>
+        </div>
+      </section>
+
+      <section class="panel pxb evo" aria-labelledby="evoTitle">
+        <div class="panel-head">
+          <h3 id="evoTitle">Dòng tiến hoá</h3>
+          <button class="btn btn-xs" id="revealBtn" type="button" aria-pressed="false">Hiện tất cả</button>
+        </div>
+        <ol class="evo-line" id="evoLine"></ol>
+      </section>
+    </aside>
+  </main>
+  <p class="keys" id="keys">Phím tắt: <kbd>1</kbd>–<kbd id="keyMax">4</kbd> chọn linh thú · <kbd>A</kbd> cho ăn · <kbd>L</kbd> luyện tập · <kbd>K</kbd> kỹ năng · <kbd>+</kbd> tăng 5 cấp · <kbd>M</kbd> âm thanh · chạm vào linh thú để vuốt ve</p>
+</div>
+
+<div class="modal" id="confirm" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" hidden>
+  <div class="panel pxb modal-box">
+    <h2 id="confirmTitle">Đặt lại tiến trình?</h2>
+    <p id="confirmText">Cấp độ, EXP và các lần tiến hoá sẽ trở về ban đầu.</p>
+    <div class="modal-row">
+      <button class="btn btn-sm" id="confirmNo" type="button">Giữ nguyên</button>
+      <button class="btn btn-sm btn-danger" id="confirmYes" type="button">Đặt lại</button>
+    </div>
+  </div>
+</div>
+
+<script src="data/pets.js"></script>
+<script>
+(() => {
+  'use strict';
+
+  /* ================= data ================= */
+  const PETS = (Array.isArray(window.IQX_PETS) ? window.IQX_PETS : [])
+    .filter((p) => p && p.slug && Array.isArray(p.stages) && p.stages.length);
+  const $ = (s) => document.querySelector(s);
+  const NF = (s) => String(s == null ? '' : s).normalize('NFC');
+
+  if (!PETS.length) {
+    $('#game').innerHTML = '<p class="nodata pxb">Chưa tải được dữ liệu linh thú (data/pets.js). Hãy mở trang từ thư mục game/.</p>';
+    return;
+  }
+
+  const SPR = 192, FEET = 188, PET_TOP = -8, ARENA_H = PET_TOP + SPR + 9; // the top 8 sprite rows are always empty sky
+  const MAX_LV = 99;
+  const STATS = [['hp', 'HP', 'heart', 'var(--hp)'], ['atk', 'Công', 'sword', 'var(--atk)'], ['def', 'Thủ', 'shield', 'var(--def)'], ['spd', 'Tốc', 'bolt', 'var(--spd)']];
+  const STAT_MAX = Math.max(100, ...PETS.flatMap((p) => p.stages.flatMap((s) => STATS.map(([k]) => +((s.stats || {})[k]) || 0))));
+  const needExp = (lv) => 20 + lv * 6;
+  const RMQ = matchMedia('(prefers-reduced-motion: reduce)');
+  let reduced = RMQ.matches;
+  const setRM = () => document.documentElement.classList.toggle('rm', reduced);
+  setRM();
+  try { RMQ.addEventListener('change', (e) => { reduced = e.matches; setRM(); }); } catch (e) { /* old browsers */ }
+
+  const stageFor = (pet, lv) => { let i = 0; pet.stages.forEach((s, k) => { if (lv >= (+s.level || 1)) i = k; }); return i; };
+  const stageName = (pet, i) => NF(pet.stages[i].name) || NF(pet.name);
+  const skillOf = (pet, i) => {
+    const sk = pet.stages[i].skill || {};
+    return { name: NF(sk.name) || 'Tuyệt kỹ ' + NF(pet.layer || pet.name), desc: NF(sk.desc) };
+  };
+  const hex = (h) => { const m = /^#?([0-9a-f]{6})$/i.exec(String(h || '').trim()); const n = parseInt(m ? m[1] : '22d3ee', 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+  const mix = (a, b, t) => [0, 1, 2].map((i) => Math.round(a[i] + (b[i] - a[i]) * t));
+  const css = (c, a) => a == null ? `rgb(${c[0]},${c[1]},${c[2]})` : `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+
+  /* ================= state ================= */
+  const KEY = 'iqx-linh-thu-v1';
+  const fresh = () => ({ sel: PETS[0].slug, muted: false, reveal: false, pets: {} });
+  let state = fresh();
+  function loadState(src) {
+    let raw = src;
+    if (!raw) { try { raw = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { raw = null; } }
+    const s = fresh();
+    if (raw && typeof raw === 'object') {
+      if (PETS.some((p) => p.slug === raw.sel)) s.sel = raw.sel;
+      s.muted = !!raw.muted; s.reveal = !!raw.reveal;
+      const rp = raw.pets && typeof raw.pets === 'object' ? raw.pets : {};
+      PETS.forEach((p) => {
+        const r = rp[p.slug];
+        if (r && typeof r === 'object') {
+          const lv = Math.max(1, Math.min(MAX_LV, Math.floor(+r.lv) || 1));
+          s.pets[p.slug] = { lv, exp: Math.max(0, Math.min(needExp(lv) - 1, Math.floor(+r.exp) || 0)), st: stageFor(p, lv) };
+        }
+      });
+    }
+    PETS.forEach((p) => { if (!s.pets[p.slug]) s.pets[p.slug] = { lv: 1, exp: 0, st: stageFor(p, 1) }; });
+    return s;
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* storage blocked: keep playing in memory */ } }
+  const cur = () => PETS.find((p) => p.slug === state.sel) || PETS[0];
+  const ps = (pet) => state.pets[pet.slug];
+
+  /* ================= pixel icons ================= */
+  const ICONS = {
+    food: { rows: ['.kkkkkkk.', 'kGgg#gggk', 'kgGg#gGgk', 'kggg#gggk', 'k#######k', 'kggg#gggk', 'kgGg#gGgk', 'kggg#gggk', '.kkkkkkk.'], pal: { k: '#0b2a14', g: '#2f9e4f', G: '#5fd27a', '#': '#e9d29a' } },
+    train: { rows: ['.##...##.', '###...###', '#########', '#########', '###...###', '.##...##.'] },
+    skill: { rows: ['....#....', '....#....', '...###...', '..#####..', '#########', '..#####..', '...###...', '....#....', '....#....'] },
+    up: { rows: ['....#....', '...###...', '..##.##..', '.##...##.', '....#....', '...###...', '..##.##..', '.##...##.'] },
+    sound: { rows: ['...#.....', '..##..#..', '####...#.', '####.#.#.', '####.#.#.', '####...#.', '..##..#..', '...#.....'] },
+    mute: { rows: ['...#.....', '..##.....', '####.#.#.', '####..#..', '####.#.#.', '####.....', '..##.....', '...#.....'] },
+    reset: { rows: ['..####.#.', '.#....##.', '#....###.', '#........', '#.......#', '#.......#', '.#.....#.', '..#####..'] },
+    heart: { rows: ['.##.##.', '#######', '#######', '.#####.', '..###..', '...#...'] },
+    sword: { rows: ['.....##', '....###', '...###.', '#.###..', '.###...', '..#....', '.#.#...'] },
+    shield: { rows: ['#######', '#######', '#######', '#######', '.#####.', '..###..', '...#...'] },
+    bolt: { rows: ['...###.', '..###..', '.###...', '######.', '..###..', '.###...', '.#.....'] },
+    arrow: { rows: ['....#...', '....##..', '#######.', '########', '#######.', '....##..', '....#...'] },
+    egg: { rows: ['...kk...', '..kwwk..', '.kwwwwk.', '.kwawwk.', 'kwwwwawk', 'kwawwwwk', 'kwwwwwwk', 'kwwaawwk', '.kwwwwk.', '..kkkk..'], pal: { k: '#07061a', w: '#fff3d6', a: 'var(--acc)' } },
+  };
+  function iconSVG(name) {
+    const ic = ICONS[name]; const h = ic.rows.length, w = ic.rows[0].length;
+    let out = '';
+    ic.rows.forEach((row, y) => {
+      let x = 0;
+      while (x < w) {
+        const ch = row[x];
+        if (ch === '.') { x++; continue; }
+        let e = x; while (e < w && row[e] === ch) e++;
+        const fill = ic.pal ? (ic.pal[ch] || 'currentColor') : 'currentColor';
+        out += `<rect x="${x}" y="${y}" width="${e - x}" height="1" fill="${fill}"/>`;
+        x = e;
+      }
+    });
+    return `<svg viewBox="0 0 ${w} ${h}" style="--w:${w};--h:${h}" shape-rendering="crispEdges" aria-hidden="true" focusable="false">${out}</svg>`;
+  }
+  document.querySelectorAll('[data-ico]').forEach((el) => { el.innerHTML = iconSVG(el.dataset.ico); });
+  $('#logoEgg').innerHTML = iconSVG('egg');
+
+  /* ================= sprites ================= */
+  const IMG = {}, BOX = {};
+  function img(path) {
+    if (!IMG[path]) {
+      const im = new Image();
+      im.onload = () => { measure(path); onSpriteLoaded(); };
+      im.src = path; IMG[path] = im;
+    }
+    return IMG[path];
+  }
+  function measure(path) {
+    const im = IMG[path];
+    try {
+      const c = document.createElement('canvas'); c.width = SPR; c.height = SPR;
+      const g = c.getContext('2d', { willReadFrequently: true });
+      g.drawImage(im, 0, 0);
+      const d = g.getImageData(0, 0, SPR, SPR).data; // throws on file:// (opaque origin): fall back to estimates
+      let x0 = SPR, y0 = SPR, x1 = 0, y1 = 0; const edge = [];
+      const A = (x, y) => (x < 0 || y < 0 || x >= SPR || y >= SPR) ? 0 : d[(y * SPR + x) * 4 + 3];
+      for (let y = 0; y < SPR; y++) for (let x = 0; x < SPR; x++) {
+        if (!A(x, y)) continue;
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        if (!A(x - 1, y) || !A(x + 1, y) || !A(x, y - 1) || !A(x, y + 1)) edge.push(x, y);
+      }
+      if (x1 > x0) BOX[path] = { x0, y0, x1: x1 + 1, y1: y1 + 1, edge };
+    } catch (e) { /* estimate used */ }
+  }
+  function boxOf(pet, i) {
+    const b = BOX[pet.stages[i].sprite];
+    if (b) return b;
+    const f = pet.stages.length > 1 ? i / (pet.stages.length - 1) : 0;
+    const w = Math.round(100 + 52 * f), h = Math.round(106 + 52 * f);
+    return { x0: 96 - (w >> 1), x1: 96 + (w >> 1), y0: FEET + 1 - h, y1: FEET + 1, edge: null };
+  }
+  PETS.forEach((p) => p.stages.forEach((s) => { img(s.sprite); if (s.blink) img(s.blink); }));
+  let spriteTimer = 0;
+  function onSpriteLoaded() { clearTimeout(spriteTimer); spriteTimer = setTimeout(() => { placeHit(); renderRoster(); renderEvo(); rebuildAura(); }, 60); }
+
+  /* ================= sound ================= */
+  const NOTE = { C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99, A5: 880, B5: 987.77, C6: 1046.5, D6: 1174.7, E6: 1318.5, G6: 1568, C7: 2093 };
+  const Sfx = {
+    ctx: null, master: null, muted: false,
+    wake() {
+      if (this.muted) return;
+      if (!this.ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+        try { this.ctx = new AC(); this.master = this.ctx.createGain(); this.master.gain.value = 0.45; this.master.connect(this.ctx.destination); } catch (e) { this.ctx = null; return; }
+      }
+      if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
+    },
+    ok() { return !!this.ctx && !this.muted && this.ctx.state === 'running'; },
+    tone(f, d, o = {}) {
+      if (!this.ok()) return;
+      const c = this.ctx, t = c.currentTime + (o.at || 0);
+      const osc = c.createOscillator(), g = c.createGain();
+      osc.type = o.type || 'square';
+      osc.frequency.setValueAtTime(f, t);
+      if (o.to) osc.frequency.exponentialRampToValueAtTime(o.to, t + d);
+      const v = o.vol == null ? 0.07 : o.vol;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(v, t + 0.006);
+      g.gain.setValueAtTime(v, t + d * 0.55);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      osc.connect(g); g.connect(this.master); osc.start(t); osc.stop(t + d + 0.03);
+    },
+    noise(d, o = {}) {
+      if (!this.ok()) return;
+      const c = this.ctx, t = c.currentTime + (o.at || 0);
+      const buf = c.createBuffer(1, Math.ceil(c.sampleRate * d), c.sampleRate); const ch = buf.getChannelData(0);
+      for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+      const src = c.createBufferSource(); src.buffer = buf;
+      const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(o.from || 4000, t); f.frequency.exponentialRampToValueAtTime(o.to || 200, t + d);
+      const g = c.createGain(); const v = o.vol || 0.12; g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      src.connect(f); f.connect(g); g.connect(this.master); src.start(t); src.stop(t + d + 0.02);
+    },
+    ui() { this.tone(NOTE.C6, 0.04, { vol: 0.03 }); },
+    tick() { this.tone(1400 + Math.random() * 200, 0.018, { vol: 0.015 }); },
+    tap() { this.tone(NOTE.E6, 0.06, { vol: 0.05 }); this.tone(NOTE.G6, 0.08, { at: 0.07, vol: 0.05 }); },
+    feed() { this.tone(NOTE.C5, 0.06, { vol: 0.05 }); this.tone(NOTE.E5, 0.06, { at: 0.08 }); this.tone(NOTE.G5, 0.1, { at: 0.16 }); },
+    train() { this.tone(220, 0.22, { to: 760, vol: 0.06 }); this.noise(0.12, { at: 0.5, from: 1200, to: 150, vol: 0.08 }); },
+    skill() { this.noise(0.35, { from: 6000, to: 300, vol: 0.12 }); this.tone(1200, 0.3, { to: 180, type: 'sawtooth', vol: 0.05 }); [NOTE.C6, NOTE.E6, NOTE.G6].forEach((n, i) => this.tone(n, 0.07, { at: 0.12 + i * 0.06, vol: 0.04 })); },
+    level() { [NOTE.C5, NOTE.E5, NOTE.G5, NOTE.C6].forEach((n, i) => this.tone(n, 0.09, { at: i * 0.07, vol: 0.06 })); },
+    evoTick(k) { this.tone(260 + k * 38, 0.05, { vol: 0.045, type: k % 2 ? 'square' : 'triangle' }); },
+    hum() { this.tone(55, 3.6, { type: 'triangle', vol: 0.09, to: 110 }); },
+    boom() { this.noise(0.9, { from: 7000, to: 120, vol: 0.2 }); this.tone(140, 0.7, { to: 40, type: 'sine', vol: 0.18 }); },
+    fanfare() {
+      const seq = [[NOTE.C5, 0.12], [NOTE.E5, 0.12], [NOTE.G5, 0.12], [NOTE.C6, 0.34], [0, 0.06], [NOTE.G5, 0.12], [NOTE.C6, 0.6]];
+      let t = 0;
+      seq.forEach(([n, d]) => { if (n) { this.tone(n, d, { at: t, vol: 0.07 }); this.tone(n / 2, d, { at: t, vol: 0.04, type: 'triangle' }); } t += d + 0.02; });
+    },
+  };
+
+  /* ================= DOM refs ================= */
+  const arena = $('#arena'), arenaBox = $('#arenaBox'), scene = $('#scene');
+  const bg = $('#bg'), fx = $('#fx'), glow = $('#glow'), bgx = bg.getContext('2d'), fxx = fx.getContext('2d'), glx = glow.getContext('2d');
+  const petPos = $('#petPos'), petMove = $('#petMove'), petA = $('#petA'), petB = $('#petB'), petAura = $('#petAura'), petHit = $('#petHit');
+  const flashEl = $('#flash'), floaters = $('#floaters'), banner = $('#banner'), bannerText = $('#bannerText');
+  const logEl = $('#log');
+
+  /* ================= layout ================= */
+  const S = { s: 3, W: 0, H: ARENA_H, ox: 13 };
+  function layout() {
+    const avail = Math.floor(arenaBox.clientWidth);
+    if (!avail) return;
+    const s = avail >= 3 * 172 ? 3 : 2;
+    let W = Math.min(Math.floor(avail / s), 264);
+    if (W % 2) W--;
+    if (s === S.s && W === S.W && bg.width === W) return;
+    S.s = s; S.W = W; S.H = ARENA_H; S.ox = (W - SPR) / 2;
+    bg.width = fx.width = glow.width = W; bg.height = fx.height = glow.height = S.H;
+    const st = arena.style;
+    st.setProperty('--aw', W * s + 'px'); st.setProperty('--ah', S.H * s + 'px'); st.setProperty('--s', s);
+    petPos.style.setProperty('--pl', S.ox * s); petPos.style.setProperty('--pt', PET_TOP * s);
+    buildLayers(); rebuildAura(); placeHit();
+  }
+
+  /* ================= scene layers ================= */
+  const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+  const bay = (x, y) => (BAYER[(y & 3) * 4 + (x & 3)] + 0.5) / 16;
+  function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function layer(w, h) {
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d'); const id = g.createImageData(w, h);
+    return {
+      c, w, h,
+      set(x, y, col, a = 255) { x |= 0; y |= 0; if (x < 0 || y < 0 || x >= w || y >= h) return; const i = (y * w + x) * 4; id.data[i] = col[0]; id.data[i + 1] = col[1]; id.data[i + 2] = col[2]; id.data[i + 3] = a; },
+      rect(x, y, rw, rh, col, a) { for (let j = 0; j < rh; j++) for (let i = 0; i < rw; i++) this.set(x + i, y + j, col, a); },
+      bmp(rows, x, y, pal) { rows.forEach((r, j) => { for (let i = 0; i < r.length; i++) { const k = r[i]; if (k !== '.' && pal[k]) this.set(x + i, y + j, pal[k]); } }); },
+      done() { g.putImageData(id, 0, 0); return c; },
+    };
+  }
+  const L = { sky: null, far: null, mid: null, ground: null, stars: [], clouds: [], lanterns: [], flies: [], accent: [34, 211, 238] };
+  const PAGODA = ['.....#.....', '.....#.....', '....###....', '#.#######.#', '.#########.', '...#####...', '...##y##...', '#.#######.#', '.#########.', '..#######..', '..##y#y##..', '..#######..', '.#########.'];
+  const PINE = ['..#..', '.###.', '..#..', '.###.', '#####', '.###.', '#####', '..#..'];
+  function buildLayers() {
+    const { W, H } = S; const acc = L.accent = hex(cur().accent);
+    const R = rng(7 + W);
+    const HZ = PET_TOP + 160;
+    // sky with dithered bands, tinted by the pet's accent near the horizon
+    const stops = [[0, [6, 5, 24]], [0.38, [17, 12, 54]], [0.7, [36, 24, 88]], [1, mix([66, 36, 112], acc, 0.28)]];
+    const grad = (t) => { for (let i = 1; i < stops.length; i++) if (t <= stops[i][0]) { const [t0, c0] = stops[i - 1], [t1, c1] = stops[i]; return mix(c0, c1, (t - t0) / (t1 - t0)); } return stops[stops.length - 1][1]; };
+    const N = 9; const pal = Array.from({ length: N }, (_, i) => grad(i / (N - 1)));
+    const sky = layer(W, H);
+    for (let y = 0; y < H; y++) {
+      const f = Math.min(1, y / HZ) * (N - 1); const b = Math.floor(f), fr = f - b;
+      for (let x = 0; x < W; x++) sky.set(x, y, pal[Math.min(N - 1, b + (fr > bay(x, y) ? 1 : 0))]);
+    }
+    // moon with halo
+    const mx = W - 30, my = 28, mr = 9;
+    for (let y = my - mr - 8; y <= my + mr + 8; y++) for (let x = mx - mr - 8; x <= mx + mr + 8; x++) {
+      const d = Math.hypot(x + 0.5 - mx, y + 0.5 - my);
+      if (d <= mr) {
+        const shade = Math.hypot(x + 0.5 - mx + 3, y + 0.5 - my + 3) > mr + 1.5;
+        sky.set(x, y, shade ? [226, 210, 160] : [255, 244, 205]);
+      } else if (d <= mr + 7 && (1 - (d - mr) / 7) * 0.5 > bay(x, y)) sky.set(x, y, mix(pal[2], [255, 244, 205], 0.18));
+    }
+    [[-3, -2], [2, 2], [-1, 4], [3, -4]].forEach(([dx, dy]) => sky.set(mx + dx, my + dy, [214, 196, 146]));
+    L.sky = sky.done(); L.moon = { x: mx, y: my, r: mr + 3 };
+
+    // stars
+    L.stars = [];
+    const nStars = Math.round(W * 0.55);
+    for (let i = 0; i < nStars; i++) {
+      const x = Math.floor(R() * W), y = Math.floor(R() * (HZ - 30));
+      if (Math.hypot(x - mx, y - my) < mr + 9) continue;
+      const big = R() < 0.06;
+      L.stars.push({ x, y, b: big ? 2 : R() < 0.25 ? 1 : 0, big, tw: big || R() < 0.3, ph: Math.floor(R() * 12) });
+    }
+    L.clouds = [0, 1, 2].map((i) => ({ x: Math.floor(R() * W), y: 18 + i * 22 + Math.floor(R() * 10), w: 26 + Math.floor(R() * 26), v: 0.5 + R() * 0.7 }));
+
+    // far mountains (wider than the view for parallax)
+    const fw = W + 10; const far = layer(fw, H);
+    const fc = mix([26, 20, 70], acc, 0.06), frim = mix([46, 38, 118], acc, 0.12);
+    const p1 = R() * 6, p2 = R() * 6, p3 = R() * 6;
+    const fy = (x) => Math.round(PET_TOP + 150 - (9 * Math.sin(x * 0.045 + p1) + 6 * Math.sin(x * 0.11 + p2) + 3 * Math.sin(x * 0.27 + p3)) - 6);
+    for (let x = 0; x < fw; x++) { const t = fy(x); for (let y = t; y < H; y++) far.set(x, y, y === t ? frim : fc); }
+    L.far = far.done();
+
+    // near hills with a pagoda and pines
+    const mw = W + 16; const mid = layer(mw, H);
+    const mc = [17, 13, 46], mrim = [30, 24, 74];
+    const q1 = R() * 6, q2 = R() * 6;
+    const my2 = (x) => Math.round(PET_TOP + 172 - (5 * Math.sin(x * 0.06 + q1) + 3 * Math.sin(x * 0.15 + q2)));
+    for (let x = 0; x < mw; x++) { const t = my2(x); for (let y = t; y < H; y++) mid.set(x, y, y === t ? mrim : mc); }
+    const px = Math.round(mw * 0.16), pTop = my2(px + 5) - PAGODA.length + 1;
+    mid.bmp(PAGODA, px, pTop, { '#': mc, y: [255, 198, 92] });
+    [[0.74, 0], [0.8, 3], [0.9, 1]].forEach(([f, dy]) => { const x = Math.round(mw * f); mid.bmp(PINE, x, my2(x + 2) - PINE.length + 2 + dy, { '#': mc }); });
+    L.mid = mid.done();
+
+    // ground field + stone dais in front
+    const gr = layer(W, H);
+    const G0 = PET_TOP + 179;
+    for (let y = G0; y < H; y++) for (let x = 0; x < W; x++) {
+      const t = (y - G0) / (H - G0);
+      gr.set(x, y, y === G0 ? [40, 34, 92] : t > 0.7 && (t - 0.7) * 3 > bay(x, y) ? [13, 10, 34] : [22, 18, 56]);
+    }
+    for (let i = 0; i < W * 0.5; i++) { const x = Math.floor(R() * W), y = G0 + 1 + Math.floor(R() * (H - G0 - 2)); gr.set(x, y, [31, 26, 76]); gr.set(x, y - 1, [31, 26, 76]); }
+    const cx = W / 2, cy = PET_TOP + FEET - 1, rx = Math.min(80, W / 2 - 6), ry = 9;
+    const inE = (x, y, a, b) => ((x + 0.5 - cx) / a) ** 2 + ((y + 0.5 - cy) / b) ** 2 <= 1;
+    for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
+      let yb = -1; for (let y = cy + ry; y >= cy; y--) if (inE(x, y, rx, ry)) { yb = y; break; }
+      if (yb < 0) continue;
+      for (let k = 1; k <= 4; k++) gr.set(x, yb + k, k === 4 ? [12, 9, 32] : (x + k) % 9 === 0 ? [22, 18, 56] : [30, 24, 74]);
+    }
+    const rune = mix([60, 50, 140], acc, 0.75);
+    for (let y = cy - ry - 1; y <= cy + ry + 1; y++) for (let x = Math.floor(cx - rx - 1); x <= Math.ceil(cx + rx + 1); x++) {
+      if (!inE(x, y, rx, ry)) continue;
+      const edge = !inE(x - 1, y, rx, ry) || !inE(x + 1, y, rx, ry) || !inE(x, y - 1, rx, ry) || !inE(x, y + 1, rx, ry);
+      const inner = inE(x, y, rx - 9, ry - 2.4); const innerEdge = !inner && inE(x, y, rx - 8, ry - 2);
+      let c = [46, 39, 104];
+      if (inner) c = [54, 46, 120];
+      if (innerEdge) c = [40, 33, 92];
+      if (edge) c = y < cy ? [82, 70, 168] : [64, 54, 140];
+      gr.set(x, y, c);
+    }
+    for (let a = 0; a < 24; a++) {
+      const ang = a / 24 * Math.PI * 2;
+      const x = Math.round(cx + Math.cos(ang) * (rx - 8.5)), y = Math.round(cy + Math.sin(ang) * (ry - 2.2));
+      gr.set(x, y, rune);
+      if (a % 2 === 0) gr.set(x + 1, y, rune);
+    }
+    L.ground = gr.done(); L.dais = { cx, cy, rx, ry };
+
+    // sky lanterns and fireflies
+    L.lanterns = [0, 1, 2].map((i) => ({ x: Math.floor(W * (0.2 + 0.3 * i) + R() * 20), y: PET_TOP + 60 + Math.floor(R() * 110), v: 0.6 + R() * 0.5, ph: R() * 6 }));
+    L.flies = Array.from({ length: 7 }, () => ({ x: R() * W, y: PET_TOP + 150 + R() * 50, ph: R() * 6, vx: 0, vy: 0 }));
+  }
+
+  /* ================= aura (final form) ================= */
+  const aura = { frames: [], parts: [], orbs: [] };
+  function rebuildAura() {
+    aura.frames = []; aura.parts = [];
+    const pet = cur(), p = ps(pet);
+    if (!p || p.st !== pet.stages.length - 1 || pet.stages.length < 2) return;
+    const b = boxOf(pet, p.st), acc = hex(pet.accent);
+    const cx = S.ox + (b.x0 + b.x1) / 2, cy = PET_TOP + (b.y0 + b.y1) / 2 + 4;
+    const bw = b.x1 - b.x0, bh = b.y1 - b.y0;
+    for (let f = 0; f < 4; f++) {
+      const rx = bw * 0.58 + f * 2, ry = bh * 0.56 + f * 2;
+      const l = layer(S.W, S.H);
+      for (let y = Math.floor(cy - ry); y <= cy + ry; y++) for (let x = Math.floor(cx - rx); x <= cx + rx; x++) {
+        const d = Math.hypot((x + 0.5 - cx) / rx, (y + 0.5 - cy) / ry);
+        if (d > 1) continue;
+        const band = d < 0.55 ? 0.62 : d < 0.8 ? 0.36 : 0.14;
+        if (band > bay(x, y)) l.set(x, y, d < 0.55 ? acc : mix(acc, [20, 14, 60], 0.45), d < 0.55 ? 120 : 150);
+      }
+      aura.frames.push(l.done());
+    }
+    aura.geo = { cx, cy, bw, bh, feet: PET_TOP + b.y1 - 1, acc, light: mix(acc, [255, 255, 255], 0.55) };
+  }
+
+  /* ================= particles ================= */
+  const parts = [], rings = [];
+  const BMP = {};
+  function bmpCanvas(rows, pal) {
+    const h = rows.length, w = rows[0].length; const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d');
+    rows.forEach((r, y) => { for (let x = 0; x < w; x++) { const k = r[x]; if (k !== '.') { g.fillStyle = pal[k]; g.fillRect(x, y, 1, 1); } } });
+    return c;
+  }
+  BMP.heart = bmpCanvas(['.kk.kk.', 'kppkppk', 'kpwpppk', 'kpppppk', '.kpppk.', '..kpk..', '...k...'], { k: '#2a0a1e', p: '#ff5d8f', w: '#ffe0ec' });
+  BMP.note = bmpCanvas(['..kkkk', '..kwwk', '..k..k', '..k..k', 'kkk.kk', 'kwk.wk', 'kkk...'], { k: '#07061a', w: '#fff3d6' });
+  BMP.food = bmpCanvas(['.kkkkkkk.', 'kGgg#gggk', 'kgGg#gGgk', 'kggg#gggk', 'k#######k', 'kggg#gggk', 'kgGg#gGgk', 'kggg#gggk', '.kkkkkkk.'], { k: '#0b2a14', g: '#2f9e4f', G: '#5fd27a', '#': '#e9d29a' });
+  BMP.sweat = bmpCanvas(['.w.', 'wbw', 'bbb', '.b.'], { w: '#e8f7ff', b: '#7cc8ff' });
+
+  function emit(o) { if (parts.length < 900) parts.push(Object.assign({ vx: 0, vy: 0, ay: 0, drag: 1, life: 60, s: 1, k: 'sq', c: '#fff' }, o, { max: o.life || 60 })); }
+  function center() {
+    const pet = cur(), b = boxOf(pet, ps(pet).st);
+    return { x: S.ox + (b.x0 + b.x1) / 2, y: PET_TOP + (b.y0 + b.y1) / 2, top: PET_TOP + b.y0, feet: PET_TOP + b.y1 - 1, w: b.x1 - b.x0, h: b.y1 - b.y0, b };
+  }
+  const nP = (n) => reduced ? Math.ceil(n / 4) : n;
+
+  function hearts(n = 4) {
+    const c = center();
+    for (let i = 0; i < nP(n); i++) emit({ k: 'bmp', bmp: BMP.heart, x: c.x + (Math.random() - 0.5) * c.w * 0.6, y: c.top + 6 + Math.random() * 10, vx: (Math.random() - 0.5) * 0.3, vy: -0.35 - Math.random() * 0.3, life: 70 + Math.random() * 30, delay: i * 6 });
+    sparkles(6);
+  }
+  function sparkles(n, colors) {
+    const c = center(); const acc = css(L.accent);
+    for (let i = 0; i < nP(n); i++) {
+      const ang = Math.random() * Math.PI * 2, r = 0.5 + Math.random() * 0.25;
+      emit({ k: 'plus', c: (colors || ['#fff', acc, '#ffd25e'])[i % 3], x: c.x + Math.cos(ang) * c.w * r, y: c.y + Math.sin(ang) * c.h * r * 0.9, life: 26 + Math.random() * 30, delay: Math.floor(Math.random() * 20), s: Math.random() < 0.3 ? 2 : 1 });
+    }
+  }
+  function ring(x, y, color, speed = 1.6, life = 40) { rings.push({ x, y, r: 2, vr: speed, life, max: life, c: color }); }
+  function burst(n, opt = {}) {
+    const c = center(); const acc = css(L.accent), light = css(mix(L.accent, [255, 255, 255], 0.55));
+    const style = opt.style || 'burst';
+    for (let i = 0; i < nP(n); i++) {
+      const ang = Math.random() * Math.PI * 2, sp = (opt.speed || 2.6) * (0.35 + Math.random());
+      const col = [acc, light, '#ffffff', acc][i % 4];
+      const base = { x: c.x + (Math.random() - 0.5) * 8, y: c.y + (Math.random() - 0.5) * 8, c: col, s: Math.random() < 0.35 ? 2 : 1, life: 40 + Math.random() * 40 };
+      if (style === 'flow') { const sw = (i % 2 ? 1 : -1); emit(Object.assign(base, { vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp * 0.6, swirl: sw * 0.12, drag: 0.97, life: 60 + Math.random() * 30 })); }
+      else if (style === 'news') emit(Object.assign(base, { x: c.x + (Math.random() - 0.5) * c.w * 0.9, y: c.feet - Math.random() * c.h * 0.5, vx: (Math.random() - 0.5) * 0.8, vy: -0.8 - Math.random() * 2.2, ay: -0.02, drag: 0.98, c: [acc, '#ffd25e', '#ffffff', light][i % 4] }));
+      else if (style === 'value') emit(Object.assign(base, { k: 'gem', vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 1.2, ay: 0.09, drag: 0.985, life: 60 + Math.random() * 30 }));
+      else if (style === 'observer') emit(Object.assign(base, { k: i % 3 ? 'sq' : 'plus', vx: Math.cos(ang) * sp * 0.8, vy: Math.sin(ang) * sp * 0.8, drag: 0.94 }));
+      else emit(Object.assign(base, { vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, ay: opt.gravity || 0.03, drag: 0.96 }));
+    }
+  }
+
+  function drawPart(g, p) {
+    const x = Math.round(p.x), y = Math.round(p.y);
+    if (p.life < p.max * 0.25 && (Math.floor(p.life / 2) % 2)) return; // pixel-style fade: flicker out
+    if (p.k === 'sq') { g.fillStyle = p.c; g.fillRect(x, y, p.s, p.s); }
+    else if (p.k === 'plus') {
+      const big = p.s > 1 && p.life > p.max * 0.4;
+      g.fillStyle = p.c; g.fillRect(x - 1, y, 3, 1); g.fillRect(x, y - 1, 1, 3);
+      if (big) { g.fillRect(x - 2, y, 5, 1); g.fillRect(x, y - 2, 1, 5); }
+      g.fillStyle = '#fff'; g.fillRect(x, y, 1, 1);
+    } else if (p.k === 'gem') {
+      g.fillStyle = p.c; g.fillRect(x, y - 1, 1, 3); g.fillRect(x - 1, y, 3, 1); g.fillStyle = '#fff'; g.fillRect(x, y - 1, 1, 1);
+    } else if (p.k === 'bmp') g.drawImage(p.bmp, x - (p.bmp.width >> 1), y - (p.bmp.height >> 1));
+  }
+  function stepParts(dt) {
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i];
+      if (p.delay > 0) { p.delay -= dt; continue; }
+      if (p.target) { // converge toward a point
+        const dx = p.target.x - p.x, dy = p.target.y - p.y, d = Math.hypot(dx, dy) || 1;
+        p.vx += dx / d * 0.09 * dt; p.vy += dy / d * 0.09 * dt;
+        if (d < 4) { parts.splice(i, 1); continue; }
+      }
+      if (p.swirl) { const a = p.swirl * dt; const vx = p.vx * Math.cos(a) - p.vy * Math.sin(a); p.vy = p.vx * Math.sin(a) + p.vy * Math.cos(a); p.vx = vx; }
+      p.vy += p.ay * dt; p.vx *= Math.pow(p.drag, dt); p.vy *= Math.pow(p.drag, dt);
+      p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
+      if (p.wob) p.x += Math.sin((p.max - p.life) * 0.15 + p.wob) * 0.15 * dt;
+      if (p.life <= 0 || p.y > S.H + 10 || p.y < -20 || p.x < -20 || p.x > S.W + 20) parts.splice(i, 1);
+    }
+  }
+  function circlePx(g, cx, cy, r, skip) {
+    let x = r, y = 0, e = 1 - r; const pts = [];
+    while (x >= y) { pts.push([x, y], [y, x], [-y, x], [-x, y], [-x, -y], [-y, -x], [y, -x], [x, -y]); y++; if (e < 0) e += 2 * y + 1; else { x--; e += 2 * (y - x) + 1; } }
+    pts.forEach(([dx, dy], i) => { if (!skip || i % skip) g.fillRect(Math.round(cx + dx), Math.round(cy + dy * 0.55), 1, 1); });
+  }
+
+  /* ================= pet motion ================= */
+  const motion = { kind: null, t0: 0, dur: 0, h: 0 };
+  let shakeUntil = 0, lastOff = -1, lastShake = '';
+  function hop(h = 7, dur = 420) { motion.kind = 'hop'; motion.t0 = performance.now(); motion.dur = dur; motion.h = reduced ? Math.min(2, h) : h; motion.landed = false; }
+  function petOffset(now) {
+    if (motion.kind) {
+      const p = (now - motion.t0) / motion.dur;
+      if (p >= 1) { motion.kind = null; if (motion.onLand) { const f = motion.onLand; motion.onLand = null; f(); } }
+      else return Math.round(motion.h * 4 * p * (1 - p));
+    }
+    if (reduced || evo.active) return 0;
+    return Math.floor(now / 560) % 2; // two-step idle bob, 1 sprite px
+  }
+
+  /* ================= evolution visuals ================= */
+  const evo = { active: false, rays: 0, rot: 0, converge: false, cx: 0, cy: 0 };
+  let rayImg = null;
+  function drawRays(g) {
+    const { W, H } = S;
+    if (!rayImg || rayImg.width !== W || rayImg.height !== H) rayImg = g.createImageData(W, H);
+    const d = rayImg.data; d.fill(0);
+    const I = evo.rays, cx = evo.cx, cy = evo.cy, acc = L.accent, rmax = Math.hypot(W, H) * 0.75;
+    const N = 9, wth = 0.86 - 0.1 * I, glowR = 26 + 46 * I;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const dx = x + 0.5 - cx, dy = y + 0.5 - cy, dist = Math.hypot(dx, dy);
+      let a = 0;
+      if (dist < glowR) a = (1 - dist / glowR) * (0.45 + 0.55 * I);
+      const r = Math.cos(N * (Math.atan2(dy, dx) - evo.rot));
+      if (r > wth) a = Math.max(a, (0.25 + 0.6 * I) * Math.max(0, 1 - dist / rmax) * ((r - wth) / (1 - wth) * 0.6 + 0.4));
+      const th = bay(x, y);
+      if (a > th) {
+        const i = (y * W + x) * 4; const hot = a > th + 0.38;
+        d[i] = hot ? 255 : acc[0]; d[i + 1] = hot ? 255 : acc[1]; d[i + 2] = hot ? 255 : acc[2]; d[i + 3] = hot ? 235 : 170;
+      }
+    }
+    g.putImageData(rayImg, 0, 0);
+  }
+
+  /* ================= main loop ================= */
+  let pointer = 0, pointerT = 0, last = performance.now(), wipe = null;
+  arena.addEventListener('pointermove', (e) => { const r = arena.getBoundingClientRect(); pointerT = ((e.clientX - r.left) / r.width - 0.5) * 2; });
+  arena.addEventListener('pointerleave', () => { pointerT = 0; });
+
+  function frame(now) {
+    const dt = Math.min(3, (now - last) / 16.667); last = now;
+    if (bg.width !== S.W) layout();
+    pointer += (pointerT - pointer) * 0.05 * dt;
+    const off = petOffset(now);
+    let shake = '';
+    if (now < shakeUntil && !reduced) shake = `translate(${(Math.floor(now / 40) % 2 ? 1 : -1) * S.s}px, ${(Math.floor(now / 55) % 2 ? 1 : 0) * S.s}px)`;
+    if (off !== lastOff) { petMove.style.transform = `translateY(${-off * S.s}px)`; lastOff = off; }
+    if (shake !== lastShake) { scene.style.transform = shake; lastShake = shake; }
+    drawBG(now, dt, off);
+    drawFX(now, dt);
+    requestAnimationFrame(frame);
+  }
+
+  function drawBG(now, dt, off) {
+    const g = bgx, { W, H } = S;
+    if (!L.sky) return;
+    g.drawImage(L.sky, 0, 0);
+    const still = reduced;
+    for (const s of L.stars) {
+      let b = s.b;
+      if (s.tw && !still) { const k = (Math.floor(now / 230) + s.ph) % 12; b = k === 0 ? -1 : k < 3 ? 2 : s.b; }
+      if (b < 0) continue;
+      g.fillStyle = b === 2 ? '#fff6d8' : b === 1 ? '#b2a6ea' : '#5d529e';
+      g.fillRect(s.x, s.y, 1, 1);
+      if (s.big && b === 2) { g.fillStyle = 'rgba(255,246,216,.55)'; g.fillRect(s.x - 1, s.y, 1, 1); g.fillRect(s.x + 1, s.y, 1, 1); g.fillRect(s.x, s.y - 1, 1, 1); g.fillRect(s.x, s.y + 1, 1, 1); }
+    }
+    // drifting clouds
+    const drift = still ? 0 : now / 420;
+    g.fillStyle = 'rgba(58,44,120,.55)';
+    for (const c of L.clouds) {
+      const span = W + c.w + 20; const x = Math.round(((c.x + drift * c.v) % span) - c.w - 10);
+      g.fillRect(x + 4, c.y, c.w - 8, 1); g.fillRect(x, c.y + 1, c.w, 2); g.fillRect(x + 6, c.y + 3, c.w - 14, 1);
+    }
+    const pf = Math.round(pointer * 2), pm = Math.round(pointer * 4);
+    g.drawImage(L.far, -5 + pf, 0);
+    // sky lanterns rise from behind the hills
+    for (const l of L.lanterns) {
+      if (!still) { l.y -= 0.035 * l.v * dt; if (l.y < -8) { l.y = PET_TOP + 178; l.x = Math.floor(Math.random() * (W - 10)) + 5; } }
+      const x = Math.round(l.x + Math.sin(now / 900 + l.ph) * 1.2 + pointer * 3), y = Math.round(l.y);
+      g.fillStyle = 'rgba(255,158,61,.2)'; g.fillRect(x - 1, y - 2, 5, 8); g.fillRect(x - 2, y - 1, 7, 6);
+      g.fillStyle = '#ff9e3d'; g.fillRect(x, y, 3, 4); g.fillRect(x + 1, y - 1, 1, 1);
+      g.fillStyle = '#ffe08a'; g.fillRect(x + 1, y + 2, 1, 1);
+    }
+    g.drawImage(L.mid, -8 + pm, 0);
+    g.drawImage(L.ground, 0, 0);
+    // fireflies
+    for (const f of L.flies) {
+      if (!still) {
+        f.vx += (Math.random() - 0.5) * 0.04 * dt; f.vy += (Math.random() - 0.5) * 0.03 * dt;
+        f.vx *= 0.96; f.vy *= 0.96; f.x += f.vx * dt; f.y += f.vy * dt;
+        if (f.x < 2) f.vx += 0.05; if (f.x > W - 2) f.vx -= 0.05; if (f.y < PET_TOP + 145) f.vy += 0.04; if (f.y > H - 3) f.vy -= 0.04;
+      }
+      if (Math.sin(now / 520 + f.ph) > 0.1 || still) { g.fillStyle = '#eaff8f'; g.fillRect(Math.round(f.x), Math.round(f.y), 1, 1); }
+    }
+    // ground shadow (shrinks while airborne)
+    const c = center();
+    const rx = Math.max(8, c.w * 0.36 * (1 - Math.min(off, 24) / 40)), ry = 2.5;
+    g.fillStyle = 'rgba(10,8,34,.72)';
+    for (let y = -2; y <= 2; y++) { const hw = Math.round(rx * Math.sqrt(Math.max(0, 1 - (y / ry) ** 2))); g.fillRect(Math.round(c.x - hw), c.feet + y, hw * 2, 1); }
+    // final-form aura behind the sprite
+    if (aura.frames.length && !evo.active) {
+      const k = still ? 1 : [0, 1, 2, 3, 2, 1][Math.floor(now / 170) % 6];
+      g.drawImage(aura.frames[k], 0, 0);
+      const A = aura.geo;
+      if (!still && aura.parts.length < 70 && Math.random() < 0.9 * dt) {
+        aura.parts.push({ x: A.cx + (Math.random() - 0.5) * A.bw * 0.95, y: A.feet - Math.random() * A.bh * 0.5, vy: -0.25 - Math.random() * 0.45, life: 50 + Math.random() * 60, ph: Math.random() * 6, c: Math.random() < 0.5 ? css(A.acc) : css(A.light), s: Math.random() < 0.2 ? 2 : 1 });
+      }
+      for (let i = aura.parts.length - 1; i >= 0; i--) {
+        const p = aura.parts[i]; p.y += p.vy * dt; p.life -= dt;
+        if (p.life <= 0) { aura.parts.splice(i, 1); continue; }
+        if (p.life < 15 && Math.floor(p.life / 2) % 2) continue;
+        g.fillStyle = p.c; g.fillRect(Math.round(p.x + Math.sin(p.life * 0.12 + p.ph) * 1.4), Math.round(p.y), p.s, p.s * (p.s > 1 ? 1 : 2));
+      }
+      drawOrbs(g, now, false);
+    }
+  }
+  function drawOrbs(g, now, front) {
+    const A = aura.geo; if (!A) return;
+    const n = 4, t = reduced ? 0.6 : now * 0.0011;
+    for (let i = 0; i < n; i++) {
+      for (let tr = 3; tr >= 0; tr--) {
+        const a = t + i * Math.PI * 2 / n - tr * 0.07;
+        const isFront = Math.sin(a) > 0; if (isFront !== front) continue;
+        const x = Math.round(A.cx + Math.cos(a) * A.bw * 0.62), y = Math.round(A.cy + A.bh * 0.12 + Math.sin(a) * 7);
+        if (tr) { if (reduced) continue; g.fillStyle = css(A.acc, 0.7 - tr * 0.18); g.fillRect(x, y, 1, 1); continue; }
+        g.fillStyle = css(A.acc); g.fillRect(x - 1, y, 3, 1); g.fillRect(x, y - 1, 1, 3); g.fillStyle = '#fff'; g.fillRect(x, y, 1, 1);
+      }
+    }
+  }
+
+  let glowOn = false;
+  function drawFX(now, dt) {
+    const g = fxx, { W, H } = S;
+    g.clearRect(0, 0, W, H);
+    if (evo.rays > 0.01) {
+      if (!reduced) evo.rot += 0.004 * dt * (1 + evo.rays * 5);
+      drawRays(glx); glowOn = true;
+    } else if (glowOn) { glx.clearRect(0, 0, W, H); glowOn = false; }
+    if (evo.converge && !reduced && Math.random() < 0.95 * dt) {
+      for (let i = 0; i < 1 + Math.floor(evo.rays * 3); i++) {
+        const a = Math.random() * Math.PI * 2, r = 70 + Math.random() * 40;
+        emit({ x: evo.cx + Math.cos(a) * r, y: evo.cy + Math.sin(a) * r * 0.8, vx: 0, vy: 0, target: { x: evo.cx, y: evo.cy }, c: Math.random() < 0.5 ? '#ffffff' : css(L.accent), s: Math.random() < 0.3 ? 2 : 1, life: 120, drag: 0.97 });
+      }
+    }
+    stepParts(dt);
+    for (const p of parts) if (!(p.delay > 0)) drawPart(g, p);
+    for (let i = rings.length - 1; i >= 0; i--) {
+      const r = rings[i]; r.r += r.vr * dt; r.life -= dt;
+      if (r.life <= 0) { rings.splice(i, 1); continue; }
+      g.fillStyle = r.c; circlePx(g, r.x, r.y, Math.round(r.r), r.life < r.max * 0.4 ? 3 : 0);
+    }
+    if (aura.frames.length && !evo.active) drawOrbs(g, now, true);
+    if (wipe) drawWipe(g, now);
+  }
+
+  /* pixel dissolve used when switching pets */
+  function drawWipe(g, now) {
+    const p = (now - wipe.t0) / wipe.dur, B = 8, nx = Math.ceil(S.W / B), ny = Math.ceil(S.H / B);
+    if (p >= 0.5 && !wipe.swapped) { wipe.swapped = true; wipe.swap(); }
+    if (p >= 1) { wipe = null; return; }
+    g.fillStyle = '#07061a';
+    for (let by = 0; by < ny; by++) for (let bx = 0; bx < nx; bx++) {
+      const k = (bx + by) / (nx + ny);
+      const c = p < 0.5 ? Math.max(0, Math.min(1, (p * 2 * 1.6 - k) * 2.2)) : Math.max(0, Math.min(1, 1 - ((p - 0.5) * 2 * 1.6 - k) * 2.2));
+      const sz = Math.round(c * B / 2) * 2; if (!sz) continue;
+      g.fillRect(bx * B + (B - sz) / 2, by * B + (B - sz) / 2, sz, sz);
+    }
+  }
+
+  /* ================= floating text / banner / log ================= */
+  function floatText(text, cls = '', dx = 0, dy = 0) {
+    const c = center(); const el = document.createElement('span');
+    el.className = 'floater ' + cls; el.textContent = text;
+    el.style.left = Math.round((c.x + dx) * S.s) + 'px'; el.style.top = Math.round((Math.max(16, c.top - 4) + dy) * S.s) + 'px';
+    floaters.appendChild(el); el.addEventListener('animationend', () => el.remove());
+    setTimeout(() => el.remove(), 3000);
+  }
+  function showBanner(text) {
+    bannerText.textContent = text; banner.classList.remove('go'); void banner.offsetWidth; banner.classList.add('go');
+  }
+  function flash(kind) {
+    flashEl.className = 'flash' + (kind === 'tint' ? ' tint' : '') + (reduced ? ' soft' : ''); void flashEl.offsetWidth; flashEl.classList.add('go');
+  }
+  function say(parts) {
+    logEl.textContent = '';
+    logEl.parentNode.title = parts.map((p) => Array.isArray(p) ? p[0] : p).join('');
+    parts.forEach((p) => { if (Array.isArray(p)) { const b = document.createElement('b'); b.textContent = p[0]; logEl.appendChild(b); } else logEl.appendChild(document.createTextNode(p)); });
+  }
+
+  /* ================= rendering UI ================= */
+  function pipsHTML(n, on) { let s = ''; for (let i = 0; i < n; i++) s += `<i class="${i <= on ? 'on' : ''}"></i>`; return s; }
+  function portraitPos(pet, i, w) {
+    const b = boxOf(pet, i); const cx = (b.x0 + b.x1) / 2, cy = b.y0 + (b.y1 - b.y0) * 0.4;
+    const top = Math.max(0, Math.min(SPR - w, Math.round(cy - w / 2)));
+    return `${Math.round(w / 2 - cx)}px ${-top}px`;
+  }
+  function renderRoster() {
+    const el = $('#roster');
+    if (!el.children.length) {
+      PETS.forEach((pet, k) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'slot'; b.dataset.slug = pet.slug;
+        b.style.setProperty('--c', pet.accent || '#22d3ee');
+        b.innerHTML = '<span class="pic"><img alt="" draggable="false"></span><span class="meta"><span class="nm"></span><span class="lv"><span class="lvt"></span><span class="pips"></span></span></span>';
+        b.addEventListener('click', () => { Sfx.wake(); selectPet(pet.slug); });
+        el.appendChild(b);
+      });
+    }
+    const small = matchMedia('(max-width: 640px)').matches;
+    [...el.children].forEach((b) => {
+      const pet = PETS.find((p) => p.slug === b.dataset.slug); const p = ps(pet);
+      const im = b.querySelector('img'); const src = pet.stages[p.st].sprite;
+      if (im.getAttribute('src') !== src) im.src = src;
+      im.style.setProperty('--pp', portraitPos(pet, p.st, small ? 48 : 56));
+      b.querySelector('.nm').textContent = NF(pet.name);
+      b.querySelector('.lvt').textContent = 'Cấp ' + p.lv;
+      b.querySelector('.pips').innerHTML = pipsHTML(pet.stages.length, p.st);
+      b.setAttribute('aria-pressed', String(pet.slug === state.sel));
+      b.setAttribute('aria-label', `${NF(pet.name)}, ${stageName(pet, p.st)}, cấp ${p.lv}`);
+    });
+  }
+  function meter(el, n, frac) {
+    if (el.children.length !== n) el.innerHTML = '<i></i>'.repeat(n);
+    const on = Math.round(Math.max(0, Math.min(1, frac)) * n);
+    [...el.children].forEach((c, i) => c.classList.toggle('on', i < on));
+  }
+  function renderHUD(deltas) {
+    const pet = cur(), p = ps(pet), st = pet.stages[p.st], last = p.st === pet.stages.length - 1;
+    document.documentElement.style.setProperty('--acc', pet.accent || '#22d3ee');
+    $('#rankChip').textContent = NF(st.rank) || `Hình thái ${p.st + 1}`;
+    $('#layerTag').innerHTML = '<i></i>'; $('#layerTag').append('Hệ ' + NF(pet.layer || pet.element || ''));
+    const nm = $('#petName'); nm.textContent = stageName(pet, p.st); nm.classList.toggle('mythic', last && pet.stages.length > 1);
+    $('#petDesc').textContent = NF(st.desc) || NF(pet.tagline);
+    $('#lvNum').textContent = p.lv;
+    const need = needExp(p.lv), maxed = p.lv >= MAX_LV;
+    $('#expTxt').innerHTML = maxed ? '<b>TỐI ĐA</b>' : `<b>${p.exp}</b> / ${need}`;
+    const eb = $('#expBar'); meter(eb, 24, maxed ? 1 : p.exp / need);
+    eb.setAttribute('aria-valuemax', need); eb.setAttribute('aria-valuenow', maxed ? need : p.exp);
+    const nx = pet.stages[p.st + 1];
+    $('#nextEvo').innerHTML = nx ? `Tiến hoá ở <b>cấp ${+nx.level}</b> · còn ${Math.max(0, nx.level - p.lv)} cấp` : '<b>Hình thái cuối cùng</b>';
+    // stats
+    const box = $('#stats');
+    if (box.children.length < STATS.length + 1) {
+      STATS.forEach(([k, label, ic, col]) => {
+        const r = document.createElement('div'); r.className = 'stat'; r.style.setProperty('--mc', col); r.dataset.k = k;
+        r.innerHTML = `<span class="ico" aria-hidden="true">${iconSVG(ic)}</span><span>${label}</span><div class="meter" role="meter" aria-label="${label}" aria-valuemin="0" aria-valuemax="${STAT_MAX}"></div><span class="val"></span>`;
+        box.appendChild(r);
+      });
+    }
+    STATS.forEach(([k]) => {
+      const r = box.querySelector(`[data-k="${k}"]`); const v = +((st.stats || {})[k]) || 0;
+      const m = r.querySelector('.meter'); m.setAttribute('aria-valuenow', v);
+      const val = r.querySelector('.val'); val.textContent = v;
+      if (deltas && deltas[k] > 0) {
+        animateMeter(m, deltas[k + '0'] / STAT_MAX, v / STAT_MAX);
+        const d = document.createElement('span'); d.className = 'delta'; d.textContent = '+' + deltas[k]; val.appendChild(d);
+      } else meter(m, 20, v / STAT_MAX);
+    });
+    const sk = skillOf(pet, p.st);
+    $('#skillName').textContent = sk.name;
+    $('#skillDesc').textContent = sk.desc || 'Tung chiêu để bùng nổ sức mạnh hệ ' + NF(pet.layer || '') + '.';
+    $('#skillBtn').setAttribute('aria-label', 'Dùng kỹ năng ' + sk.name);
+    // arena plate
+    $('#plateName').textContent = NF(pet.name);
+    $('#plateLv').textContent = 'Cấp ' + p.lv;
+    $('#platePips').innerHTML = pipsHTML(pet.stages.length, p.st);
+    petHit.setAttribute('aria-label', 'Vuốt ve ' + stageName(pet, p.st));
+    $('#lvBtn').disabled = maxed;
+  }
+  function animateMeter(m, from, to) {
+    meter(m, 20, from);
+    const n = 20, a = Math.round(from * n), b = Math.round(to * n);
+    for (let i = a; i < b; i++) setTimeout(() => m.children[i] && m.children[i].classList.add('on'), reduced ? 0 : 140 + (i - a) * 55);
+  }
+  function renderEvo(unlockIdx) {
+    const pet = cur(), p = ps(pet), ol = $('#evoLine');
+    ol.innerHTML = '';
+    ol.style.gridTemplateColumns = pet.stages.map(() => 'minmax(0,1fr)').join(' var(--arrow-w, 30px) ');
+    pet.stages.forEach((st, i) => {
+      if (i) {
+        const a = document.createElement('li'); a.className = 'arrow' + (i <= p.st ? ' lit' : ''); a.setAttribute('aria-hidden', 'true');
+        a.innerHTML = `<span class="ico">${iconSVG('arrow')}</span><span>Cấp<br>${+st.level}</span>`;
+        ol.appendChild(a);
+      }
+      const known = i <= p.st, show = known || state.reveal;
+      const li = document.createElement('li');
+      li.className = 'form' + (i === p.st ? ' current' : '') + (known ? '' : ' locked') + (!known && state.reveal ? ' peek' : '') + (i === unlockIdx ? ' unlock' : '');
+      const name = show ? stageName(pet, i) : '???';
+      li.innerHTML = `<div class="pic"><img alt="" draggable="false">${show ? '' : '<span class="q" aria-hidden="true">?</span>'}</div><span class="f-rank"></span><span class="f-name"></span><span class="f-lv"></span>`;
+      const im = li.querySelector('img'); im.src = st.sprite; im.style.setProperty('--pp', portraitPos(pet, i, 84));
+      im.alt = show ? name : 'Hình thái chưa mở khoá';
+      li.querySelector('.f-rank').textContent = NF(st.rank) || `Hình thái ${i + 1}`;
+      li.querySelector('.f-name').textContent = name;
+      li.querySelector('.f-lv').textContent = known ? (i === p.st ? 'Hiện tại' : 'Đã mở') : 'Cấp ' + (+st.level);
+      ol.appendChild(li);
+    });
+    const rb = $('#revealBtn'); rb.setAttribute('aria-pressed', String(state.reveal)); rb.textContent = state.reveal ? 'Ẩn hình chưa mở' : 'Hiện tất cả';
+  }
+  function placeHit() {
+    const pet = cur(), p = ps(pet); if (!p) return; const b = boxOf(pet, p.st), s = S.s;
+    Object.assign(petHit.style, { left: (S.ox + b.x0 - 2) * s + 'px', top: (PET_TOP + b.y0 - 2) * s + 'px', width: (b.x1 - b.x0 + 4) * s + 'px', height: (b.y1 - b.y0 + 4) * s + 'px' });
+  }
+  function showPet() {
+    const pet = cur(), p = ps(pet), st = pet.stages[p.st];
+    petA.src = st.sprite; petA.classList.remove('off'); petB.classList.add('off');
+    petA.alt = stageName(pet, p.st);
+    petAura.src = st.sprite;
+    petPos.classList.toggle('mythic', p.st === pet.stages.length - 1 && pet.stages.length > 1);
+  }
+  function renderAll() { buildLayers(); showPet(); renderRoster(); renderHUD(); renderEvo(); rebuildAura(); placeHit(); }
+
+  /* ================= blinking ================= */
+  let blinkT = 0;
+  function scheduleBlink() {
+    clearTimeout(blinkT);
+    blinkT = setTimeout(() => {
+      const pet = cur(), p = ps(pet), st = pet.stages[p.st];
+      if (!evo.active && st.blink && petA.getAttribute('src') === st.sprite) {
+        petA.src = st.blink;
+        setTimeout(() => { if (petA.getAttribute('src') === st.blink) petA.src = st.sprite; }, 120);
+      }
+      scheduleBlink();
+    }, 2000 + Math.random() * 3000);
+  }
+
+  /* ================= actions ================= */
+  let busy = false, idleT = 0;
+  function gainExp(n) {
+    const pet = cur(), p = ps(pet); let ups = 0;
+    if (p.lv >= MAX_LV) return 0;
+    p.exp += n;
+    while (p.lv < MAX_LV && p.exp >= needExp(p.lv)) { p.exp -= needExp(p.lv); p.lv++; ups++; }
+    if (p.lv >= MAX_LV) p.exp = 0;
+    return ups;
+  }
+  function afterGain(ups, delay = 0) {
+    const pet = cur(), p = ps(pet);
+    save(); renderHUD(); renderRoster(); renderEvo();
+    if (ups) {
+      setTimeout(() => {
+        floatText('LÊN CẤP!', 'big', 0, -12); Sfx.level(); sparkles(14);
+        say(['Lên ', ['cấp ' + p.lv], '! ', stageName(pet, p.st), ' mạnh hơn rồi.']);
+      }, delay);
+    }
+    if (stageFor(pet, p.lv) > p.st) setTimeout(() => runEvolution(), delay + (ups ? 900 : 300));
+  }
+  function feed() {
+    if (busy) return; Sfx.wake(); const pet = cur(), p = ps(pet);
+    if (p.lv >= MAX_LV) { say([stageName(pet, p.st), ' đã đạt cấp tối đa.']); return; }
+    const n = 12 + Math.floor(Math.random() * 6); const c = center();
+    emit({ k: 'bmp', bmp: BMP.food, x: c.x, y: c.top - 26, vy: 0.4, ay: 0.12, life: 26, drag: 0.99 });
+    Sfx.feed();
+    setTimeout(() => {
+      const c2 = center();
+      for (let i = 0; i < nP(10); i++) emit({ x: c2.x + (Math.random() - 0.5) * 8, y: c2.top + c2.h * 0.3, vx: (Math.random() - 0.5) * 1.6, vy: -Math.random() * 1.6, ay: 0.12, c: ['#e9d29a', '#2f9e4f', '#5fd27a'][i % 3], life: 30 + Math.random() * 20 });
+      hop(4, 300); hearts(2); floatText('+' + n + ' EXP');
+      const ups = gainExp(n);
+      say([stageName(pet, p.st), ' ăn bánh chưng ngon lành. ', ['+' + n + ' EXP']]);
+      afterGain(ups, 250);
+    }, reduced ? 50 : 380);
+  }
+  function train() {
+    if (busy) return; Sfx.wake(); const pet = cur(), p = ps(pet);
+    if (p.lv >= MAX_LV) { say([stageName(pet, p.st), ' đã đạt cấp tối đa.']); return; }
+    const n = 28 + Math.floor(Math.random() * 10);
+    Sfx.train(); hop(22, 640);
+    const c = center();
+    emit({ k: 'bmp', bmp: BMP.sweat, x: c.x + c.w * 0.32, y: c.top + 6, vx: 0.5, vy: -0.8, ay: 0.08, life: 36 });
+    motion.onLand = () => {
+      const c2 = center(); shakeUntil = performance.now() + 160;
+      for (let i = 0; i < nP(16); i++) { const side = i % 2 ? 1 : -1; emit({ x: c2.x + side * c2.w * 0.3, y: c2.feet - 1, vx: side * (0.4 + Math.random() * 1.2), vy: -Math.random() * 0.7, drag: 0.93, c: i % 3 ? '#4b4290' : '#7a70c0', s: 2, life: 26 + Math.random() * 14 }); }
+      floatText('+' + n + ' EXP');
+      const ups = gainExp(n);
+      say([stageName(pet, p.st), ' luyện tập chăm chỉ! ', ['+' + n + ' EXP']]);
+      afterGain(ups, 150);
+    };
+  }
+  function useSkill() {
+    if (busy) return; Sfx.wake(); const pet = cur(), p = ps(pet); const sk = skillOf(pet, p.st);
+    const style = String(pet.element || '').split('_')[0];
+    Sfx.skill(); flash('tint'); showBanner(sk.name); hop(5, 320);
+    shakeUntil = performance.now() + 320;
+    const c = center(); const acc = css(L.accent);
+    ring(c.x, c.y + c.h * 0.2, acc, 1.8, 46); setTimeout(() => ring(c.x, c.y + c.h * 0.2, '#ffffff', 2.2, 36), 120);
+    burst(70 + p.st * 30, { style });
+    sparkles(10);
+    const n = 6;
+    const ups = p.lv < MAX_LV ? gainExp(n) : 0;
+    say([stageName(pet, p.st), ' tung chiêu ', [sk.name], '!']);
+    afterGain(ups, 600);
+  }
+  function plusFive() {
+    if (busy) return; Sfx.wake(); const pet = cur(), p = ps(pet);
+    if (p.lv >= MAX_LV) return;
+    const before = p.lv; p.lv = Math.min(MAX_LV, p.lv + 5); p.exp = 0;
+    floatText('+' + (p.lv - before) + ' CẤP', 'big', 0, -12); Sfx.level(); sparkles(16); hop(6, 360);
+    for (let i = 0; i < nP(14); i++) { const c = center(); emit({ x: c.x + (Math.random() - 0.5) * c.w * 0.8, y: c.feet - Math.random() * 6, vy: -0.6 - Math.random() * 1.2, c: i % 2 ? '#ffd25e' : '#fff3c4', life: 40 + Math.random() * 30, s: i % 4 ? 1 : 2 }); }
+    say([stageName(pet, p.st), ' lĩnh hội bí kíp: ', ['cấp ' + before + ' → ' + p.lv], '.']);
+    save(); renderHUD(); renderRoster(); renderEvo();
+    if (stageFor(pet, p.lv) > p.st) setTimeout(() => runEvolution(), 700);
+  }
+  function tapPet() {
+    if (busy) return; Sfx.wake(); Sfx.tap(); hop(6, 360); hearts(4);
+    const pet = cur(), p = ps(pet);
+    const lines = [' rất thích được vuốt ve.', ' dụi đầu vào tay bạn.', ' vui vẻ nhảy cẫng lên.', ' nhìn bạn đầy tin tưởng.'];
+    say([[stageName(pet, p.st)], lines[Math.floor(Math.random() * lines.length)]]);
+  }
+  function idle() {
+    clearTimeout(idleT);
+    idleT = setTimeout(() => {
+      if (!busy && !reduced && !motion.kind && !document.hidden) {
+        if (Math.random() < 0.5) hop(3, 280);
+        else { const c = center(); emit({ k: 'bmp', bmp: BMP.note, x: c.x + c.w * 0.34, y: c.top + 4, vx: 0.15, vy: -0.35, wob: 1, life: 70 }); }
+      }
+      idle();
+    }, 7000 + Math.random() * 6000);
+  }
+
+  function selectPet(slug, instant) {
+    if (busy || slug === state.sel) { if (slug === state.sel) renderRoster(); return; }
+    state.sel = slug; save(); Sfx.ui();
+    const swap = () => {
+      parts.length = 0; rings.length = 0; aura.parts = []; renderAll();
+      const pet = cur(), p = ps(pet); say(['Đã chọn ', [stageName(pet, p.st)], '. ' + NF(pet.tagline)]);
+      if (stageFor(pet, p.lv) > p.st) setTimeout(runEvolution, 600);
+    };
+    renderRoster();
+    if (instant || reduced) swap(); else wipe = { t0: performance.now(), dur: 520, swapped: false, swap };
+  }
+
+  /* ================= dialog ================= */
+  const dialog = $('#dialog'), dlgText = $('#dlgText'), dlgLive = $('#dlgLive'), dlgNext = $('#dlgNext');
+  let dlgAdvance = null, dlgLastAdv = 0;
+  function speak(segs, opt = {}) {
+    return new Promise((resolve) => {
+      const auto = opt.auto || 0;
+      segs = segs.map(([t, c]) => [NF(t), c]);
+      const full = segs.map((s) => s[0]).join('');
+      dialog.hidden = false; dialog.classList.toggle('auto', !!auto); dialog.classList.remove('ready');
+      dlgLive.textContent = full; dlgText.textContent = '';
+      const spans = segs.map(([t, c]) => { const sp = document.createElement('span'); if (c) sp.className = c; dlgText.appendChild(sp); return [sp, t]; });
+      let n = 0, typing = true, timer = 0, autoT = 0;
+      const render = () => { let left = n; spans.forEach(([sp, t]) => { sp.textContent = t.slice(0, Math.max(0, Math.min(t.length, left))); left -= t.length; }); };
+      const close = () => { clearInterval(timer); clearTimeout(autoT); dialog.hidden = true; dlgAdvance = null; resolve(); };
+      const finish = () => { clearInterval(timer); n = full.length; render(); typing = false; dialog.classList.add('ready'); if (auto) autoT = setTimeout(close, skipping ? 0 : auto); };
+      dlgAdvance = () => { const t = performance.now(); if (t - dlgLastAdv < 160) return; dlgLastAdv = t; if (typing) finish(); else close(); };
+      if (reduced || skipping) finish();
+      else timer = setInterval(() => { n++; render(); if (n % 2 === 0) Sfx.tick(); if (n >= full.length) finish(); }, 28);
+      if (!auto) setTimeout(() => dlgNext.focus({ preventScroll: true }), 30);
+    });
+  }
+  dialog.addEventListener('click', () => dlgAdvance && dlgAdvance());
+
+  /* ================= evolution sequence ================= */
+  let skipping = false; const waiters = new Set();
+  const sleep = (ms) => new Promise((r) => { if (skipping) return r(); const t = setTimeout(() => { waiters.delete(done); r(); }, ms); const done = () => { clearTimeout(t); r(); }; waiters.add(done); });
+  function skipEvo() { if (!evo.active || skipping) return; skipping = true; waiters.forEach((f) => f()); waiters.clear(); if (dlgAdvance && dialog.classList.contains('auto')) dlgAdvance(); }
+  $('#skipBtn').addEventListener('click', skipEvo);
+  const lockEls = ['#top', '#side', '#commands', '#keys'].map($);
+  function lock(on) {
+    busy = on; document.body.classList.toggle('evolving', on);
+    lockEls.forEach((el) => { el.inert = on; });
+    petHit.disabled = on; $('#skipBtn').hidden = !on;
+  }
+
+  async function runEvolution() {
+    const pet = cur(), p = ps(pet);
+    if (busy || evo.active) return;
+    const from = p.st, to = from + 1;
+    if (!pet.stages[to] || stageFor(pet, p.lv) < to) return;
+    const fromSt = pet.stages[from], toSt = pet.stages[to];
+    const oldName = stageName(pet, from), newName = stageName(pet, to);
+    const returnFocus = document.activeElement;
+    lock(true); evo.active = true; skipping = false;
+    motion.kind = null; parts.length = 0; rings.length = 0;
+    petA.src = fromSt.sprite; petB.src = toSt.sprite;
+    const c = center(); evo.cx = c.x; evo.cy = c.y + 4;
+    say(['Ơ kìa? ', [oldName], ' đang phát sáng...']);
+    Sfx.hum();
+    // 1. lights down, body turns to light
+    arena.classList.add('dimmed');
+    petPos.classList.remove('mythic');
+    await speak([['Ơ kìa? '], [oldName, 'nm'], [' đang tiến hoá!']], { auto: 800 });
+    petPos.classList.add('sil-in', 'sil');
+    evo.converge = true;
+    for (let i = 0; i < 10 && !skipping; i++) { evo.rays = i / 40; await sleep(60); }
+
+    // 2. flicker between the two forms, faster and faster
+    if (reduced) {
+      petPos.classList.add('xfade'); petB.style.opacity = '0'; petB.classList.remove('off');
+      void petB.offsetWidth; petB.style.opacity = '1'; petA.style.opacity = '0'; evo.rays = 0.35;
+      await sleep(1800);
+    } else {
+      let gap = 430, k = 0; const t0 = performance.now();
+      while (!skipping && performance.now() - t0 < 3600) {
+        const showNew = k % 2 === 0;
+        petA.classList.toggle('off', showNew); petB.classList.toggle('off', !showNew);
+        Sfx.evoTick(k);
+        evo.rays = Math.min(1, 0.25 + (performance.now() - t0) / 3600 * 0.75);
+        if (k % 3 === 0) sparkles(3, ['#ffffff', css(L.accent), '#ffffff']);
+        await sleep(gap); gap = Math.max(34, gap * 0.82); k++;
+      }
+    }
+
+    // 3. white-out
+    evo.converge = false;
+    flash(); Sfx.boom(); shakeUntil = performance.now() + 420;
+    p.st = to; save();
+    await sleep(140);
+    petPos.classList.remove('sil', 'sil-in', 'xfade');
+    petA.style.opacity = ''; petB.style.opacity = '';
+    petA.src = toSt.sprite; petA.classList.remove('off'); petB.classList.add('off');
+    petAura.src = toSt.sprite; petPos.classList.toggle('mythic', to === pet.stages.length - 1);
+    evo.rays = 0; arena.classList.remove('dimmed');
+    const deltas = {};
+    STATS.forEach(([k]) => { const a = +((fromSt.stats || {})[k]) || 0, b = +((toSt.stats || {})[k]) || 0; deltas[k] = b - a; deltas[k + '0'] = a; });
+    rebuildAura(); placeHit();
+    const c2 = center(); evo.cx = c2.x; evo.cy = c2.y;
+    ring(c2.x, c2.y, '#ffffff', 2.6, 50); ring(c2.x, c2.y, css(L.accent), 1.7, 60);
+    burst(140, { speed: 3.4, gravity: 0.025 });
+    hop(10, 520);
+    document.body.classList.remove('evolving');
+    renderHUD(deltas); renderRoster(); renderEvo(to);
+    evo.active = false;
+    showBanner(NF(toSt.rank) || newName);
+    setTimeout(() => sparkles(18), 300);
+    await sleep(1100);
+
+    // 4. the dialog
+    Sfx.fanfare();
+    say(['Chúc mừng! ', [oldName], ' đã tiến hoá thành ', [newName], '!']);
+    $('#skipBtn').hidden = true; skipping = false;
+    await speak([['Chúc mừng! '], [oldName, 'nm'], [' đã tiến hoá thành '], [newName, 'nm-acc'], ['!']]);
+    lock(false);
+    if (to === pet.stages.length - 1) say([[newName], ' đã đạt hình thái tối thượng. Hào quang Thần thú bao quanh!']);
+    try { (returnFocus && returnFocus.isConnected ? returnFocus : $('#feedBtn')).focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+    if (stageFor(pet, p.lv) > p.st) setTimeout(runEvolution, 400);
+  }
+
+  /* ================= confirm (reset) ================= */
+  const confirmEl = $('#confirm'); let confirmReturn = null;
+  function openConfirm() {
+    if (busy) return; Sfx.wake(); Sfx.ui();
+    $('#confirmText').textContent = `Cấp độ, EXP và các lần tiến hoá của cả ${PETS.length} linh thú sẽ trở về ban đầu.`;
+    confirmReturn = document.activeElement; confirmEl.hidden = false; $('#app').inert = true;
+    $('#confirmNo').focus();
+  }
+  function closeConfirm(doReset) {
+    confirmEl.hidden = true; $('#app').inert = false;
+    if (doReset) {
+      const keep = { muted: state.muted, sel: state.sel };
+      state = loadState({ sel: keep.sel, muted: keep.muted, reveal: false, pets: {} });
+      save(); parts.length = 0; aura.parts = []; renderAll();
+      say(['Đã đặt lại tiến trình. Bắt đầu hành trình mới!']);
+      hearts(3);
+    }
+    try { (confirmReturn || $('#resetBtn')).focus(); } catch (e) { /* ignore */ }
+  }
+  $('#resetBtn').addEventListener('click', openConfirm);
+  $('#confirmNo').addEventListener('click', () => closeConfirm(false));
+  $('#confirmYes').addEventListener('click', () => { Sfx.ui(); closeConfirm(true); });
+  confirmEl.addEventListener('click', (e) => { if (e.target === confirmEl) closeConfirm(false); });
+
+  /* ================= wiring ================= */
+  $('#feedBtn').addEventListener('click', feed);
+  $('#trainBtn').addEventListener('click', train);
+  $('#skillBtn').addEventListener('click', useSkill);
+  $('#lvBtn').addEventListener('click', plusFive);
+  petHit.addEventListener('click', tapPet);
+  $('#revealBtn').addEventListener('click', () => { Sfx.wake(); Sfx.ui(); state.reveal = !state.reveal; save(); renderEvo(); });
+  function renderSound() {
+    const b = $('#soundBtn'); b.setAttribute('aria-pressed', String(!state.muted));
+    $('#soundIco').innerHTML = iconSVG(state.muted ? 'mute' : 'sound');
+    b.querySelector('.lbl').textContent = state.muted ? 'Tắt tiếng' : 'Âm thanh';
+    b.setAttribute('aria-label', state.muted ? 'Bật âm thanh' : 'Tắt âm thanh');
+  }
+  function toggleSound() { state.muted = !state.muted; Sfx.muted = state.muted; save(); renderSound(); Sfx.wake(); Sfx.ui(); }
+  $('#soundBtn').addEventListener('click', toggleSound);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (!confirmEl.hidden) {
+      if (e.key === 'Escape') { e.preventDefault(); closeConfirm(false); }
+      if (e.key === 'Tab') { const a = $('#confirmNo'), b = $('#confirmYes'); e.preventDefault(); (document.activeElement === a ? b : a).focus(); }
+      return;
+    }
+    if (!dialog.hidden && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); dlgAdvance && dlgAdvance(); return; }
+    if (evo.active && e.key === 'Escape') { e.preventDefault(); skipEvo(); return; }
+    if (busy) return;
+    const k = e.key.toLowerCase();
+    const n = parseInt(e.key, 10);
+    if (n >= 1 && n <= PETS.length) { Sfx.wake(); selectPet(PETS[n - 1].slug); }
+    else if (k === 'a') feed();
+    else if (k === 'l') train();
+    else if (k === 'k') useSkill();
+    else if (k === '+' || k === '=') plusFive();
+    else if (k === 'm') toggleSound();
+  });
+
+  /* ================= boot ================= */
+  function start(data) {
+    state = loadState(data && data.state);
+    Sfx.muted = state.muted;
+    $('#keyMax').textContent = PETS.length;
+    renderSound();
+    layout(); renderAll();
+    const pet = cur();
+    say(['Chào mừng tới Đền Tứ Linh! ', [stageName(pet, ps(pet).st)], ' đang chờ bạn chăm sóc.']);
+    let roRaf = 0;
+    if (window.ResizeObserver) new ResizeObserver(() => { cancelAnimationFrame(roRaf); roRaf = requestAnimationFrame(() => { layout(); renderRoster(); }); }).observe(arenaBox);
+    else addEventListener('resize', layout);
+    scheduleBlink(); idle();
+    requestAnimationFrame((t) => { last = t; frame(t); });
+    try { window.claude && window.claude.hot && window.claude.hot.snapshot && window.claude.hot.snapshot(() => ({ state })); } catch (e) { /* not in a viewer */ }
+  }
+  try {
+    const hot = window.claude && window.claude.hot;
+    if (hot && hot.ready) hot.ready(start); else start(hot && hot.data ? hot.data : {});
+  } catch (e) { start({}); }
+})();
+</script>
