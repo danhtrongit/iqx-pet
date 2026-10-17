@@ -35,16 +35,16 @@ STAGES = [
      "stats": {"hp": 42, "atk": 36, "def": 30, "spd": 55}},
     {"rank": "Trưởng thành", "name": "Thanh Long Lưu Thủy", "level": 10, "height": 130,
      "config": dict(CFG),
-     "desc": "Đôi sừng vàng nhú lên khi nó đọc được dòng tiền khối ngoại và tự doanh. Chiếc đuôi vây "
-             "cuộn sóng, dẫn thanh khoản chảy theo ý mình.",
+     "desc": "Đôi sừng vàng nhú lên khi nó đọc được dòng tiền khối ngoại và tự doanh. Vây nước mọc dọc "
+             "đuôi, cuộn sóng dẫn thanh khoản chảy theo ý mình.",
      "skill": {"name": "Xoáy Thủy Lưu",
                "desc": "Cuộn dòng tiền thành xoáy nước, hút thanh khoản của đối thủ và gây sát thương theo "
                        "khối lượng giao dịch."},
      "stats": {"hp": 64, "atk": 62, "def": 50, "spd": 76}},
     {"rank": "Thần thú", "name": "Thanh Long Vương", "level": 25, "height": 150, "dx": -4,
      "config": dict(CFG),
-     "desc": "Vua của mọi dòng chảy. Long châu soi thấu từng dòng vốn lớn trước khi thị trường kịp phản ứng; "
-             "rồng bay đến đâu, mây lành và thanh khoản hội tụ đến đó.",
+     "desc": "Vua của mọi dòng chảy: sừng vàng uy nghi, bờm rực lửa xanh. Long châu soi thấu dòng vốn lớn trước khi "
+             "thị trường kịp phản ứng; rồng đến đâu, mây lành và thanh khoản hội tụ đến đó.",
      "skill": {"name": "Long Châu Hội Lưu",
                "desc": "Long châu gom mọi dòng vốn lớn thành cột nước thần, gây sát thương diện rộng và đánh "
                        "dấu điểm gom hàng của cá mập."},
@@ -54,6 +54,7 @@ STAGES = [
 # --------------------------------------------------------------- palette ----
 INK = "#0b1b52"
 INK_HI = 32.0
+SCARF_INK = 15.0      # the dark royal-blue scarf and its knot are colour, not line art
 GROW = {1: 5, 2: 3, 3: 3}      # line-art thickening (MaxFilter size, art px) per stage
 BASE = {
     "black": "#070a16",
@@ -103,7 +104,7 @@ def flatten(img, pal, ink_l=24.0, mode=13, ink_hi=None, grow=0):
     if ink_hi is not None:
         thr[:] = ink_hi
         low = poly_mask(op.shape, [R(*q) for q in SCARF_POLY])[y0:y1, x0:x1]
-        thr[low] = ink_l
+        thr[low] = min(ink_l, SCARF_INK)
     v = np.where(lab[:, 0] < thr[sop], k_ink, nearest(lab, rgb2lab(cols)))
     lbl[sop] = v
     if grow:
@@ -225,6 +226,59 @@ def smooth_fill(art, passes=1):
         idx[fill & strong] = best[fill & strong]
 
 
+def seal_edges(art, box=None):
+    """Colour pixels that touch the outside become outline, so the silhouette keeps its 1px line."""
+    k = art.names["outline"]
+    tr = art.idx == TRANSPARENT
+    p = np.pad(tr, 1, constant_values=True)
+    edge = ~tr & (p[:-2, 1:-1] | p[2:, 1:-1] | p[1:-1, :-2] | p[1:-1, 2:]) & (art.idx != k)
+    if box is not None:
+        m = np.zeros_like(edge)
+        x0, y0, x1, y1 = [int(v) for v in box]
+        m[max(0, y0):y1 + 1, max(0, x0):x1 + 1] = True
+        edge &= m
+    art.idx[edge] = k
+
+
+def drop_ink_specks(art, max_size=2):
+    """Interior outline specks (8-connected outline blobs of <= max_size px that do not touch the
+    outside) become the most common neighbouring fill colour."""
+    k = art.names["outline"]
+    idx = art.idx
+    h, w = idx.shape
+    ol = idx == k
+    tr = idx == TRANSPARENT
+    seen = np.zeros_like(ol)
+    for y0, x0 in zip(*np.where(ol)):
+        if seen[y0, x0]:
+            continue
+        stack, comp, outside = [(y0, x0)], [], False
+        seen[y0, x0] = True
+        while stack:
+            y, x = stack.pop()
+            comp.append((y, x))
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    yy, xx = y + dy, x + dx
+                    if not (0 <= yy < h and 0 <= xx < w):
+                        outside = True
+                        continue
+                    if tr[yy, xx] and abs(dy) + abs(dx) == 1:
+                        outside = True
+                    if ol[yy, xx] and not seen[yy, xx]:
+                        seen[yy, xx] = True
+                        stack.append((yy, xx))
+        if outside or len(comp) > max_size:
+            continue
+        for y, x in comp:
+            nb = [idx[y + dy, x + dx] for dy in (-1, 0, 1) for dx in (-1, 0, 1)
+                  if (dy or dx) and 0 <= y + dy < h and 0 <= x + dx < w]
+            nb = [v for v in nb if v != k and v != TRANSPARENT]
+            if nb:
+                vals, cnt = np.unique(nb, return_counts=True)
+                idx[y, x] = vals[cnt.argmax()]
+
+
 def despeckle(art, min_area=3, box=None):
     k = art.names["outline"]
     if box is None:
@@ -285,15 +339,6 @@ def draw_parts(img, parts, ow=OW, outline=INK):
                 dk.shape(img, layers[depth][0], layers[depth][1])
 
 
-def blobs(img, circles, fill, outline=INK, ow=OW):
-    """Union of outlined ellipses (cloud puffs): outlines first, then fills."""
-    for cx, cy, rx, ry, *_ in circles:
-        dk.ellipse(img, cx, cy, rx + ow, ry + ow, outline)
-    for c in circles:
-        cx, cy, rx, ry = c[:4]
-        dk.ellipse(img, cx, cy, rx, ry, c[4] if len(c) > 4 else fill)
-
-
 def poly_mask(shape_hw, pts):
     from PIL import ImageDraw
     m = Image.new("L", (shape_hw[1], shape_hw[0]), 0)
@@ -319,19 +364,6 @@ EYE_BOX = (560, 410, 840, 560)
 GEM_BOX = (640, 690, 750, 820)
 
 
-def step_map(img, mask, steps):
-    """Cel-shade masked pixels by luminance: steps = [(upper_lum, colour), ...] ascending."""
-    a = np.array(img.convert("RGBA"))
-    lum = (0.299 * a[..., 0] + 0.587 * a[..., 1] + 0.114 * a[..., 2]) / 255
-    out = a.copy()
-    done = np.zeros(mask.shape, bool)
-    for hi, col in steps:
-        m = mask & ~done & (lum < hi)
-        out[..., :3][m] = hex2rgb(col)
-        done |= m
-    img.paste(Image.fromarray(out, "RGBA"))
-
-
 def mane_mask(img):
     """Blue hair (mane + tail tuft), not the scarf, eyes or gem."""
     m = dk.hsv_mask(img, h=(195, 232), s=(0.35, 1), v=(0.3, 1))
@@ -348,13 +380,52 @@ def mane_mask(img):
     return m
 
 
-def cloud(img, puffs):
-    """Auspicious cloud: outlined puffs, pale cyan with frost tops."""
-    blobs(img, [(*R(x, y), rx, ry) for x, y, rx, ry in puffs], FLAME["cloud"])
-    for x, y, rx, ry in puffs:
-        cx, cy = R(x, y)
-        dk.ellipse(img, cx - rx * 0.1, cy - ry * 0.2, rx * 0.82, ry * 0.68, FLAME["foam"])
-        dk.ellipse(img, cx - rx * 0.25, cy - ry * 0.42, rx * 0.4, ry * 0.3, FLAME["frost"])
+TAIL_BOX = (60, 470, 390, 860)      # ref px box around the tail tuft
+
+
+def flame_mask(img):
+    """Mane + tail tuft including their pale highlight streaks (for the stage-3 recolour)."""
+    m = mane_mask(img)
+    region = np.array(Image.fromarray((m * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(31))) > 0
+    pale = dk.hsv_mask(img, h=(170, 250), s=(0.0, 0.5), v=(0.55, 1)) & region
+    # pure-white streaks of the tail tuft (no hue)
+    tx0, ty0 = R(*TAIL_BOX[:2])
+    tx1, ty1 = R(*TAIL_BOX[2:])
+    white = dk.hsv_mask(img, s=(0.0, 0.05), v=(0.85, 1), box=(int(tx0), int(ty0), int(tx1), int(ty1))) & region
+    pale |= white
+    a = np.array(img.convert("RGB")).astype(np.float64)
+    sh = pale.shape
+    pale &= ~poly_mask(sh, [R(*q) for q in SCARF_POLY])
+    for b in (EYE_BOX, GEM_BOX):
+        x0, y0 = R(b[0], b[1])
+        x1, y1 = R(b[2], b[3])
+        pale[int(y0):int(y1), int(x0):int(x1)] = False
+    return m | pale
+
+
+def flame_recolour(img, mask, centre, r0, r1, steps, w_lum=0.45, tail_cap=0.9):
+    """Cel-shade the mane like a blue flame: deep at the roots, bright at the tips.
+    Mixes distance from `centre` (ref px, r0..r1) with the original luminance, then steps it."""
+    a = np.array(img.convert("RGBA"))
+    lum = (0.299 * a[..., 0] + 0.587 * a[..., 1] + 0.114 * a[..., 2]) / 255
+    lum = np.array(Image.fromarray((lum * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(6))) / 255
+    cx, cy = R(*centre)
+    yy, xx = np.mgrid[0:a.shape[0], 0:a.shape[1]]
+    r = np.clip((np.hypot(xx - cx, yy - cy) - r0) / (r1 - r0), 0, 1)
+    v = (1 - w_lum) * r + w_lum * np.clip((lum - 0.25) / 0.45, 0, 1)
+    # the tail tuft tops out at aqua: no frost-white patch on it
+    tx0, ty0 = R(*TAIL_BOX[:2])
+    tx1, ty1 = R(*TAIL_BOX[2:])
+    tail = np.zeros(mask.shape, bool)
+    tail[int(ty0):int(ty1), int(tx0):int(tx1)] = True
+    v = np.where(tail, np.minimum(v, tail_cap), v)
+    out = a.copy()
+    done = np.zeros(mask.shape, bool)
+    for hi, col in steps:
+        m = mask & ~done & (v < hi)
+        out[..., :3][m] = hex2rgb(col)
+        done |= m
+    img.paste(Image.fromarray(out, "RGBA"))
 
 
 # the tall mane lock of the original, used as a template for new locks (ref px polygon, base point)
@@ -397,15 +468,6 @@ def paste(layer, tpl, at, angle=0.0, scale=1.0, flip=False):
 TOES = [(324, 928), (354, 931), (380, 931), (542, 928), (580, 931), (620, 926), (760, 928), (797, 928)]
 
 
-def claws(img, cols, size=1.0):
-    """Sharp hooked claws on the toe tips."""
-    parts = []
-    for x, y in TOES:
-        c = curve((x - 4, y - 14), (x + 8 * size, y - 6), (x + 15 * size, y + 8), n=16)
-        parts.append(part(c, wlin(20 * size, 6), cols, side=-1, bands=((-1.0, 0.2),)))
-    draw_parts(img, parts, ow=4.5)
-
-
 def whisker(img, pts, w0=18, w1=6):
     """Long flowing whisker continuing the original right whisker."""
     c = curve(*pts, n=40)
@@ -423,29 +485,34 @@ def _tip(root, tip, grow):
     return tuple(r + (np.array(tip, float) - r) * grow)
 
 
-def tail_fin(layer, cols, grow=1.0, sag=0.42):
-    """Webbed water fin: a pale membrane with scalloped edge between blue rays sweeping back.
-    cols = (membrane, ray, ray highlight). Drawn on a layer that goes behind the body."""
+def tail_fin(layer, cols, grow=1.0, sag=0.55):
+    """Webbed water fin: membrane with a scalloped edge between rays sweeping back.
+    cols = (membrane edge, membrane core, ray, ray highlight). Drawn on a layer that goes behind the body."""
     tips = [_tip(r, t, grow) for r, t in zip(FIN_ROOTS, FIN_TIPS)]
-    outer = [R(*FIN_BASE[0])]
-    outer += dk.bezier([R(*FIN_BASE[0]), R(*((np.array(FIN_BASE[0]) + np.array(tips[0])) / 2 + (20, -10))),
-                        R(*tips[0])], 16)
-    for a, b in zip(tips, tips[1:]):
-        a, b = np.array(a), np.array(b)
-        mid = (a + b) / 2
-        root = (np.array(FIN_ROOTS[0]) + np.array(FIN_ROOTS[-1])) / 2
-        ctrl = mid + (root - mid) * sag          # pull the scallop toward the tail
-        outer += dk.bezier([R(*a), R(*ctrl), R(*b)], 20)
-    outer += dk.bezier([R(*tips[-1]), R(*((np.array(tips[-1]) + np.array(FIN_BASE[-1])) / 2 + (0, -24))),
-                        R(*FIN_BASE[-1])], 16)
-    inner = [R(*q) for q in FIN_BASE[::-1]]
-    poly = outer + inner
+    root = (np.array(FIN_ROOTS[0]) + np.array(FIN_ROOTS[-1])) / 2
+
+    def outline_poly(scale):
+        tp = [tuple(root + (np.array(t) - root) * scale) for t in tips]
+        outer = [R(*FIN_BASE[0])]
+        outer += dk.bezier([R(*FIN_BASE[0]), R(*((np.array(FIN_BASE[0]) + np.array(tp[0])) / 2 + (20, -10))),
+                            R(*tp[0])], 16)
+        for a, b in zip(tp, tp[1:]):
+            a, b = np.array(a), np.array(b)
+            mid = (a + b) / 2
+            ctrl = mid + (root - mid) * sag          # pull the scallop toward the tail
+            outer += dk.bezier([R(*a), R(*ctrl), R(*b)], 20)
+        outer += dk.bezier([R(*tp[-1]), R(*((np.array(tp[-1]) + np.array(FIN_BASE[-1])) / 2 + (0, -24))),
+                            R(*FIN_BASE[-1])], 16)
+        return outer + [R(*q) for q in FIN_BASE[::-1]]
+
+    poly = outline_poly(1.0)
     dk.stroke(layer, poly + [poly[0]], INK, OW * 2)
     dk.shape(layer, poly, cols[0])
-    for root, tip in zip(FIN_ROOTS, tips):
-        c = curve(root, ((root[0] + tip[0]) / 2 + 6, (root[1] + tip[1]) / 2 + 10), tip, n=30)
-        for poly_, col in part(c, wlin(34 * (0.7 + 0.3 * grow), 5, p=0.8), cols[1:], side=1,
-                               bands=((0.1, 1.0),)):
+    dk.shape(layer, outline_poly(0.62), cols[1])
+    for r, tip in zip(FIN_ROOTS, tips):
+        c = curve(r, ((r[0] + tip[0]) / 2 + 6, (r[1] + tip[1]) / 2 + 10), tip, n=30)
+        for poly_, col in part(c, wlin(36 * (0.7 + 0.3 * grow), 7, p=0.75), cols[2:], side=1,
+                               bands=((0.25, 1.0),)):
             dk.shape(layer, poly_, col)
 
 
@@ -460,7 +527,7 @@ def stage2(img, ctx):
     # finned tail: a second wave crest rising behind the tuft
     paste(back, tuft, (262, 560), -28, 0.95)
     # "Luu Thuy": water fins sweeping back along the tail
-    tail_fin(back, ("#88d7f5", "#1587ec", "#25aaf3"))
+    tail_fin(back, ("#88d7f5", "#25aaf3", "#1258db", "#1587ec"))
     img = dk.behind(img, back)
     flat, _ = flatten(img, pal, ink_hi=INK_HI, grow=GROW[2])
     g = (pal["gold_d"], pal["gold"], pal["gold_l"])
@@ -469,7 +536,7 @@ def stage2(img, ctx):
     draw_parts(flat, [part(far, wlin(44, 13), g)])
     horn = curve((702, 372), (680, 300), (630, 250), (600, 205), (598, 160), n=48)
     draw_parts(flat, [part(horn, wlin(62, 14), g)])
-    whisker(flat, ((862, 574), (900, 596), (936, 590), (958, 566)))
+    whisker(flat, ((862, 574), (900, 596), (936, 592), (958, 570)), 19, 10)
     return flat
 
 
@@ -483,45 +550,54 @@ def stage3(img, ctx):
     paste(back, tuft, (250, 560), -30, 1.15)
     paste(back, tuft, (215, 600), -62, 0.9)
     img = dk.behind(img, back)
-    # mane and tail tuft: brighter, electric blue with cyan-white highlights
-    step_map(img, mane_mask(img), [(0.30, "#1258db"), (0.46, "#1587ec"), (0.62, "#22d3ee"), (0.80, "#8ef0fb"),
-                                   (1.01, "#ecfdff")])
+    # mane and tail tuft burn like a blue flame: royal-blue roots, cyan body, frost-white tips
+    flame_recolour(img, flame_mask(img), (600, 470), 150, 480,
+                   [(0.36, "#1258db"), (0.60, "#1587ec"), (0.80, "#22d3ee"), (0.93, "#8ef0fb"), (1.01, "#ecfdff")])
+    back = dk.blank(img)
+    tail_fin(back, (FLAME["aqua"], FLAME["flame"], "#1258db", "#1587ec"), grow=1.3)
+    img = dk.behind(img, back)
     flat, _ = flatten(img, pal, ink_hi=INK_HI, grow=GROW[3])
 
     g = (pal["gold_d"], pal["gold"], pal["gold_l"])
     back = dk.blank(flat)
-    # clouds under the feet
-    cloud(back, [(178, 924, 40, 24), (234, 906, 46, 36), (292, 924, 40, 25)])
-    cloud(back, [(842, 925, 38, 24), (896, 907, 44, 35), (950, 926, 36, 22)])
-    cloud(back, [(880, 822, 30, 17), (918, 812, 34, 22), (955, 824, 28, 16)])
     # far antler
-    far = curve((792, 362), (803, 290), (790, 222), (760, 172), (752, 100), n=48)
-    far_t = curve((798, 268), (828, 222), (850, 165), n=24)
-    draw_parts(back, [part(far_t, wlin(40, 14), g), part(far, wlin(62, 16), g)])
+    far = curve((792, 362), (803, 290), (792, 222), (765, 172), (758, 104), n=48)
+    far_t = curve((799, 272), (830, 225), (858, 172), n=24)
+    draw_parts(back, [part(far_t, wlin(54, 16), g), part(far, wlin(78, 20), g)])
+    # flaming dragon pearl (the pearl itself is drawn as pixels in touchup)
+    pearl_flames(back)
     flat = dk.behind(flat, back)
 
-    # near antler: long beam sweeping back over the mane, three upward points
-    beam = curve((702, 375), (680, 296), (625, 238), (545, 205), (470, 170), (420, 120), (408, 55), n=72)
-    t1 = curve((640, 250), (648, 200), (672, 140), n=26)
-    t2 = curve((540, 200), (536, 145), (556, 85), n=26)
-    draw_parts(flat, [part(t1, wlin(46, 15), g), part(t2, wlin(44, 15), g), part(beam, wlin(80, 17), g)])
+    # near antler: a stout beam sweeping back over the mane, two tines curling forward
+    beam = curve((702, 375), (680, 296), (625, 238), (545, 205), (472, 172), (425, 125), (418, 66), n=72)
+    t1 = curve((642, 252), (650, 196), (684, 142), n=26)
+    t2 = curve((540, 206), (538, 150), (566, 92), n=26)
+    draw_parts(flat, [part(t1, wlin(62, 18), g), part(t2, wlin(60, 18), g), part(beam, wlin(98, 24), g)])
 
-    claws(flat, (pal["gold_d"], pal["gold_l"]), 1.1)
-    whisker(flat, ((862, 574), (905, 600), (950, 600), (975, 570), (982, 530)), 18, 5)
-    # golden breastplate hanging from the scarf, royal-blue inlay (the gem is drawn as pixels)
-    plate = [R(*q) for q in [(582, 704), (690, 714), (774, 698), (780, 758), (748, 812), (688, 852), (628, 816),
-                             (592, 766)]]
-    dk.shape(flat, plate, pal["gold"], INK, OW)
-    dk.shape(flat, [R(*q) for q in [(592, 712), (690, 722), (766, 707), (770, 735), (688, 742), (598, 738)]], pal["gold_l"])
-    dk.shape(flat, [R(*q) for q in [(748, 812), (688, 852), (628, 816), (640, 806), (688, 836), (738, 802)]], pal["gold_d"])
-    inlay = [R(*q) for q in [(612, 742), (688, 748), (752, 738), (752, 770), (730, 802), (688, 828), (646, 802),
-                             (620, 772)]]
-    dk.shape(flat, inlay, "#0a3aa6", INK, OW * 0.8)
-    # gold trim along the bottom of the scarf
+    whisker(flat, ((862, 574), (905, 600), (950, 602), (976, 578), (984, 546)), 20, 10)
+    # gold trim along the bottom of the scarf (the gold pendant and gem are drawn as pixels)
     dk.stroke(flat, curve((540, 712), (620, 716), (700, 722), (775, 700), n=40), INK, 22)
     dk.stroke(flat, curve((540, 712), (620, 716), (700, 722), (775, 700), n=40), pal["gold"], 11)
-
     return flat
+
+
+PEARL = ((916, 752), 40)        # ref px centre, radius
+
+
+def pearl_flames(layer):
+    """A cyan fireball behind the pearl: round base, three flame tongues licking up."""
+    (px, py), pr = PEARL
+    cols = (FLAME["flame"], FLAME["aqua"], FLAME["frost"])
+    tongues = [
+        (((px - 34, py + 6), (px - 58, py - 48), (px - 46, py - 96), (px - 22, py - 122)), 58, 5),
+        (((px + 34, py + 6), (px + 56, py - 44), (px + 50, py - 86), (px + 30, py - 106)), 54, 5),
+        (((px, py - 10), (px - 14, py - 70), (px + 2, py - 120), (px + 22, py - 156)), 64, 5),
+    ]
+    disc = [R(px + (pr + 20) * np.cos(t), py + 6 + (pr + 16) * np.sin(t)) for t in np.linspace(0, 2 * np.pi, 48)[:-1]]
+    parts = [[(disc, cols[0])]]
+    parts += [part(curve(*pts, n=36), wlin(w0, w1, p=0.8), cols, side=-1, bands=((-0.55, 0.45), (-0.25, 0.15)))
+              for pts, w0, w1 in tongues]
+    draw_parts(layer, parts)
 
 
 def compose(stage, img, ctx):
@@ -779,12 +855,14 @@ def gem(art, cx, cy, a, b, big=False):
         art.put(sx, sy - 1, "white")
 
 
-GEMS = {1: ((697, 758), (42, 51)), 2: ((697, 772), (56, 66)), 3: ((687, 783), (44, 60))}
+GEMS = {1: ((697, 758), (42, 51)), 2: ((697, 772), (56, 66)), 3: ((687, 792), (40, 54))}
 
 
 def gems(stage, art, G):
     (x, y), (a, b) = GEMS[stage]
     cx, cy = G(x, y)
+    if stage == 3:
+        pendant(art, cx, cy, G.d(a), G.d(b))
     gem(art, cx, cy, G.d(a), G.d(b), big=stage >= 2)
 
 
@@ -816,15 +894,9 @@ def fangs(stage, art, G):
 
 
 def orb(art, cx, cy, r):
-    """Crisp pixel dragon pearl wrapped in two arcs of spinning cyan energy."""
+    """Crisp pixel dragon pearl (its cyan flames are drawn in compose)."""
     k = art.names["outline"]
-    box = ebox(cx, cy, r, r, 5)
-    # energy arcs: a thin halo two pixels out, only on two opposite sides
-    ang = lambda x, y: np.degrees(np.arctan2(y - cy, x - cx))
-    halo = cover(lambda x, y: ((x - cx) ** 2 + (y - cy) ** 2 <= (r + 2.9) ** 2) &
-                 ((x - cx) ** 2 + (y - cy) ** 2 >= (r + 1.9) ** 2) &
-                 (((ang(x, y) > -175) & (ang(x, y) < -95)) | ((ang(x, y) > 5) & (ang(x, y) < 85))), box, thr=0.4)
-    art.idx[halo & (art.idx == TRANSPARENT)] = art.color("flame")
+    box = ebox(cx, cy, r, r, 3)
     art.idx[cover(ell(cx, cy, r + 0.9, r + 0.9), box)] = k
     body = cover(ell(cx, cy, r, r), box)
     art.idx[body] = art.color("aqua")
@@ -853,25 +925,190 @@ def sparkle(art, x, y, size="s", force=False):
 def glow(stage, art, G):
     if stage != 3:
         return
-    cx, cy = G(916, 752)
-    orb(art, cx, cy, G.d(40))
+    (px, py), pr = PEARL
+    cx, cy = G(px, py)
+    orb(art, cx, cy, G.d(pr))
     for (x, y), sz in ((G(985, 640), "s"), (G(330, 40), "s"), (G(860, 120), "m"), (G(120, 470), "m"),
                        (G(1000, 860), "m")):
         sparkle(art, int(x), int(y), sz)
 
 
+# auspicious clouds at the feet, sprite px relative to the cloud's left end on the ground:
+# (dx, dy_above_ground, rx, ry) puffs; the first puff carries the curl
+CLOUDS = [
+    (13, [(8.0, 6.6, 8.0, 6.4), (18.5, 4.2, 5.2, 4.2), (3.0, 2.6, 3.4, 2.6)], False),
+    (152, [(8.0, 6.6, 8.0, 6.4), (18.5, 4.2, 5.2, 4.2), (3.0, 2.6, 3.4, 2.6)], True),
+    # low bank behind the legs joining the two curls
+    (38, [(0, 3.4, 5.4, 3.4), (8, 4.6, 6.0, 4.4), (16, 3.4, 5.4, 3.4), (24, 4.6, 6.0, 4.4), (32, 3.4, 5.4, 3.4), (40, 4.6, 6.0, 4.4), (48, 3.4, 5.4, 3.4), (56, 4.6, 6.0, 4.4), (64, 3.4, 5.4, 3.4), (72, 4.6, 6.0, 4.4), (80, 3.4, 5.4, 3.4), (88, 4.6, 6.0, 4.4), (96, 3.4, 5.4, 3.4), (104, 4.6, 6.0, 4.4), (112, 3.4, 5.4, 3.4)], None),
+]
+
+
+def pixel_cloud(art, x0, puffs, flip=False):
+    """Xiangyun cloud in pixels, painted only on empty pixels so it stays behind the body:
+    frost tops, foam body, cyan underside, a curl inside the big puff, 1px outline."""
+    k = art.names["outline"]
+    yb = gk.GROUND - 1.0
+    w = max(p[0] + p[2] for p in puffs)
+    pts = [((x0 + w - dx) if flip else (x0 + dx), yb - dy, rx, ry) for dx, dy, rx, ry in puffs]
+    shape = np.zeros(art.idx.shape, bool)
+    for cx, cy, rx, ry in pts:
+        shape |= cover(ell(cx, cy, rx, ry), ebox(cx, cy, rx, ry))
+    shape[int(yb):, :] = False          # flat bottom, one row above the ground for the outline
+    free = art.idx == TRANSPARENT
+    p = np.pad(shape, 1)
+    ring = (p[:-2, 1:-1] | p[2:, 1:-1] | p[1:-1, :-2] | p[1:-1, 2:]) & ~shape
+    art.idx[ring & free] = k
+    body = shape & free
+    art.idx[body] = art.color("foam")
+    yy, xx = np.mgrid[0:gk.CANVAS, 0:gk.CANVAS]
+    art.idx[body & (yy >= yb - 2.5)] = art.color("cloud")
+    for cx, cy, rx, ry in pts:
+        top = cover(ell(cx - rx * 0.25, cy - ry * 0.45, rx * 0.5, ry * 0.4), ebox(cx, cy, rx, ry))
+        art.idx[body & top] = art.color("frost")
+    if flip is None:
+        return
+    # curl: a 3/4 ring of cloud blue inside the big puff, opening toward the rest of the cloud
+    cx, cy, rx, ry = pts[0]
+    ang = np.degrees(np.arctan2(yy + 0.5 - cy, (xx + 0.5 - cx) * (-1 if flip else 1)))
+    rr = np.hypot((xx + 0.5 - cx) / (rx * 0.62), (yy + 0.5 - cy) / (ry * 0.62))
+    curl = body & (np.abs(rr - 1.0) < 0.28) & ~((ang > -10) & (ang < 80))
+    art.idx[curl] = art.color("cloud")
+    art.put(int(round(cx)), int(round(cy)), "cloud")
+
+
+def clouds(stage, art, G):
+    if stage != 3:
+        return
+    for x0, puffs, flip in CLOUDS:
+        pixel_cloud(art, x0, puffs, flip)
+
+
+FEET = [(0, 3, 7, 9), (3, 6, 6, 7), (6, 8, 7, 9)]   # TOES index range, x margin, rows above the toes
+CLAW_GOLD = {"cream_s": "gold_d", "cream_y": "gold", "cream": "gold_l", "white": "gold_l"}
+
+
+def gold_claws(stage, art, G):
+    """Stage 3: the original cream claws turn to gold."""
+    if stage != 3:
+        return
+    for i0, i1, mx, my in FEET:
+        xs = [G(*TOES[i])[0] for i in range(i0, i1)]
+        y = G(*TOES[i0])[1]
+        x0, x1 = int(min(xs)) - mx, int(max(xs)) + mx
+        y0 = int(y) - my
+        for src, dst in CLAW_GOLD.items():
+            if src in art.names:
+                art.replace(src, dst, (x0, y0, x1, gk.GROUND - 1))
+
+
+def pendant(art, cx, cy, a, b):
+    """Gold setting for the stage-3 gem: diamond frame with side flares (the gem goes on top)."""
+    k = art.names["outline"]
+    gy = cy - b * 0.28
+    A, B = a + 2.3, b + 2.7
+    box = (cx - A - 6, cy - B - 3, cx + A + 7, cy + B + 4)
+    frame = cover(convex([(cx, cy - B), (cx + A, gy), (cx, cy + B), (cx - A, gy)]), box, thr=0.45)
+    fl = cover(convex([(cx - A - 3.6, gy - 0.4), (cx - A + 1.5, gy - 2.6), (cx - A + 1.5, gy + 2.2)]), box, thr=0.45)
+    fr = cover(convex([(cx + A + 3.6, gy - 0.4), (cx + A - 1.5, gy - 2.6), (cx + A - 1.5, gy + 2.2)]), box, thr=0.45)
+    shape = frame | fl | fr
+    p = np.pad(shape, 1)
+    ring = (p[:-2, 1:-1] | p[2:, 1:-1] | p[1:-1, :-2] | p[1:-1, 2:]) & ~shape
+    art.idx[ring] = k
+    art.idx[shape] = art.color("gold")
+    yy, xx = np.mgrid[0:gk.CANVAS, 0:gk.CANVAS]
+    lit = (xx + 0.5 - cx) * 0.8 + (yy + 0.5 - gy) < -1.0
+    dark = (xx + 0.5 - cx) * 0.8 + (yy + 0.5 - gy) > 3.0
+    art.idx[shape & lit] = art.color("gold_l")
+    art.idx[shape & dark] = art.color("gold_d")
+    # bright glint on the left flare tip and top of the frame
+    art.put(int(cx - A - 2), int(gy - 1), "gold_hi")
+    art.put(int(cx), int(cy - B + 0.6), "gold_hi")
+
+
+# near whisker of the original: from the snout down across the cheek, looping up on the left (ref px)
+WHISKER_N = [(590, 538), (548, 546), (524, 566), (510, 592), (492, 612), (466, 622), (440, 614), (421, 596),
+             (416, 572), (424, 551), (438, 541)]
+MINT = "#a6ecc4"
+WHISKER_R = {1: (1.35, 0.8), 2: (1.55, 0.9), 3: (1.75, 1.0)}       # core radius at root, at tip (sprite px)
+
+
+def whisker_px(stage, art, G):
+    """Redraw the curly near whisker as a clean pixel line: mint core, sea-green underside, 1px outline."""
+    k = art.names["outline"]
+    pts = np.array([G(*q) for q in WHISKER_N])
+    # dense polyline through the points (Catmull-Rom)
+    dense = []
+    P = np.vstack([pts[:1], pts, pts[-1:]])
+    for i in range(1, len(P) - 2):
+        for t in np.linspace(0, 1, 12, endpoint=False):
+            p0, p1, p2, p3 = P[i - 1], P[i], P[i + 1], P[i + 2]
+            dense.append(0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t +
+                                (-p0 + 3 * p1 - 3 * p2 + p3) * t ** 3))
+    dense.append(pts[-1])
+    dense = np.array(dense)
+    r0, r1 = WHISKER_R[stage]
+    rad = np.linspace(r0, r1, len(dense))
+    x0, y0 = dense.min(0) - 4
+    x1, y1 = dense.max(0) + 4
+    box = (x0, y0, x1, y1)
+
+    def within(extra, below=False):
+        def fn(x, y):
+            out = np.zeros(x.shape, bool)
+            for (cx, cy), r in zip(dense, rad):
+                d2 = (x - cx) ** 2 + (y - cy - (0.55 if below else 0)) ** 2
+                out |= d2 <= (r + extra) ** 2
+            return out
+        return fn
+    ring = cover(within(0.95), box, ss=4, thr=0.4)
+    core = cover(within(0.0), box, ss=4, thr=0.45)
+    art.idx[ring & ~core] = k
+    art.idx[core] = art.color(MINT)
+    # shade the lower edge of the line
+    sh = core & np.roll(~core, -1, axis=0)
+    art.idx[sh] = art.color("green")
+
+
 def touchup(stage, art, ctx):
     repaint(stage, art, ctx)
+    if "gold_hi" in art.names:
+        # cream fur that snapped to the near-identical pale gold stays cream
+        art.replace("gold_hi", "cream")
     smooth_fill(art, 1)
     despeckle(art, 4)
     thin_outline(art)
+    drop_ink_specks(art)
     G = Geo(ctx)
+    whisker_px(stage, art, G)
     eyes(stage, art, G)
     lids(stage, art, G)
     lettering(stage, art, G)
     gems(stage, art, G)
     fangs(stage, art, G)
+    gold_claws(stage, art, G)
+    clouds(stage, art, G)
+    seal_edges(art)
     glow(stage, art, G)
+
+
+def smooth_region(art, mask, passes=2, r=2):
+    """Majority filter over a (2r+1)^2 window, applied only to `mask` pixels (outline and empty never vote),
+    so inpainted skin gets organic edges instead of straight nearest-pixel wedges."""
+    k = art.names["outline"]
+    ys, xs = np.where(mask)
+    for _ in range(passes):
+        idx = art.idx
+        new = idx.copy()
+        for y, x in zip(ys, xs):
+            win = idx[max(0, y - r):y + r + 1, max(0, x - r):x + r + 1].ravel()
+            win = win[(win != TRANSPARENT) & (win != k)]
+            if len(win):
+                vals, cnt = np.unique(win, return_counts=True)
+                new[y, x] = vals[cnt.argmax()]
+        art.idx[...] = new
+
+
+EYE_COLS = ("white", "ice", "black", "blue_dd", "blue_d", "blue", "blue_l", "flame", "aqua", "frost")
 
 
 def blink(stage, art, ctx):
@@ -883,23 +1120,39 @@ def blink(stage, art, ctx):
     m = cover(ell(ex, ey, rx + 0.8, ry + 0.8), box)
     lash = cover(ell(ex - rx * 0.85, ey - ry * 0.45, rx * 0.55, ry * 0.5), box) & (art.idx == k)
     m |= lash
-    inpaint(art, m, avoid=("white", "ice", "black", "blue_dd", "blue_d", "blue", "blue_l", "flame", "aqua"))
-    sag = {1: 0.38, 2: 0.25, 3: 0.12}[stage]
-    yline = ey + ry * 0.15
+    m &= ~np.isin(art.idx, [art.color(MINT), art.names["green"]])     # keep the whisker
+    # closed upper lid: a bold 2px lash line, soft smile at stage 1, flatter and angled as it grows fierce
+    sag = {1: 0.36, 2: 0.24, 3: 0.12}[stage]
+    tilt = {1: 0.0, 2: 0.06, 3: 0.2}[stage]
+    yline = ey + ry * 0.12
+
+    def yc(x):
+        u = (x - ex) / (rx * 0.95)
+        return yline + sag * ry * (1 - u * u) - (x - ex) / rx * ry * tilt
 
     def arc(x, y):
         u = (x - ex) / (rx * 0.95)
-        yc = yline + sag * ry * (1 - u * u) - (0.0 if stage < 3 else (x - ex) / rx * ry * 0.18)
-        return (np.abs(u) <= 1) & (np.abs(y - yc) <= 0.6 + 0.15 * (stage - 1))
-    art.idx[cover(arc, box, thr=0.35)] = k
-    lx, ly = G(568, 470)
-    art.put(int(lx), int(ly), k)
+        return (np.abs(u) <= 1) & (np.abs(y - yc(x)) <= 1.0)
+    # the lid above the line is face skin (teal), the socket below it takes the surrounding cheek colours
+    lid = m & cover(lambda x, y: y < yc(x), box, thr=0.5) & cover(ell(ex, ey, rx + 0.2, ry + 0.2), box)
+    inpaint(art, m, avoid=EYE_COLS)
+    art.idx[lid] = art.color("teal_l")
+    smooth_region(art, m & ~lid, passes=2)
+    art.idx[cover(arc, box, thr=0.3)] = k
+    # lash flick at the outer corner
+    xl = ex - rx * 0.95
+    yl = yc(xl)
+    art.put(int(np.floor(xl)) - 1, int(np.floor(yl)) - 1, k)
+    if stage >= 2:
+        art.put(int(np.floor(xl)) - 2, int(np.floor(yl)) - 2, k)
     # far eye: short closed line
     fx, fy = G(*EYE_F["c"])
     frx, fry = G.d(EYE_F["r"][0]), G.d(EYE_F["r"][1])
     fbox = ebox(fx, fy, frx, fry, 3)
-    fm = cover(ell(fx, fy, frx, fry), fbox)
-    inpaint(art, fm, avoid=("white", "ice", "black", "blue_dd", "blue_d", "blue", "blue_l", "flame", "aqua"))
-    fl = cover(near_line((fx - frx * 0.9, fy + fry * 0.2), (fx + frx * 0.7, fy + fry * 0.3 - (0.0 if stage < 3 else 1.0)),
-                         0.6 + 0.1 * (stage - 1)), fbox, thr=0.35)
+    fm = cover(ell(fx, fy, frx + 0.3, fry + 0.3), fbox)
+    inpaint(art, fm, avoid=EYE_COLS)
+    smooth_region(art, fm, passes=1, r=1)
+    fl = cover(near_line((fx - frx * 0.95, fy + fry * 0.15),
+                         (fx + frx * 0.75, fy + fry * 0.3 - (0.0 if stage < 3 else 0.9)), 0.85), fbox, thr=0.4)
     art.idx[fl] = k
+    seal_edges(art, fbox)

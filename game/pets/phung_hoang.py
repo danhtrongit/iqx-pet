@@ -1,14 +1,16 @@
 """Phụng Hoàng: evolution line for the game sprites (see tools/gamekit.py).
 
 Big shapes (wings, crest, tail, recolours) are built at illustration level from the original's own
-painted parts, so every stage keeps the same brushwork; small details (eyes, brows, gem, IQX
-lettering, talons, crown, gorget, aura, sparks) are placed pixel by pixel in touchup().
+painted parts, so every stage keeps the same brushwork; small details (eyes, brows, beak, gem, IQX
+lettering, talons, crown, gorget, sparks) are placed pixel by pixel in touchup().
 
-  1 Tiểu Phụng             the original baby phoenix, faithfully
+  1 Tiểu Phụng             the original baby phoenix, faithfully (clean hand-drawn eyes, beak, gem)
   2 Hỏa Phụng              wings opened wide, taller flame crest, longer tail, stern eyes, embers
-  3 Thần Hỏa Phượng Hoàng  massive raised wings in a crimson -> orange -> gold fire gradient,
-                           white-hot crest under a golden crown with a royal-blue gem, golden
-                           gorget carrying the gem, slit-pupil glare, crimson fire aura
+  3 Thần Hỏa Phượng Hoàng  wings raised in a V: layered fans of the original wing stretched into
+                           long primaries, crimson tips -> orange -> gold roots; a white-hot flame
+                           crest rising straight up under a five-point golden crown set with a
+                           royal-blue diamond; golden gorget carrying the gem; slit-pupil glare.
+                           No baked aura: the demo draws its own flickering outline on the final form.
 
 """
 from __future__ import annotations
@@ -56,8 +58,8 @@ STAGES = [
      "stats": {"hp": 62, "atk": 66, "def": 44, "spd": 74}},
     {"rank": "Thần thú", "name": "Thần Hỏa Phượng Hoàng", "level": 25, "height": 146,
      "config": dict(CFG, colors=32),
-     "desc": "Thần điểu đội vương miện vàng, sải cánh lửa che kín trời, tái sinh sau mọi cơn bão tin. "
-             "Tiếng hót của Người báo trước biến động lớn của thị trường.",
+     "desc": "Thần điểu đội vương miện vàng, giương đôi cánh lửa rợp trời, tái sinh sau mọi cơn bão tin. "
+             "Mỗi tiếng hót của thần điểu đều báo trước một biến động lớn của thị trường.",
      "skill": {"name": "Niết Bàn Thần Hỏa",
                "desc": "Hóa biển lửa thiêng soi rõ mọi dòng tin: tái sinh đầy máu một lần mỗi trận, "
                        "cả đội tăng 30% công trong 3 lượt."},
@@ -73,6 +75,7 @@ P = {
     "blue_d": "#103e9c", "blue": "#1a56c4", "blue_l": "#5d93e0", "blue_hi": "#cfe2ff",
     "au_d": "#b0701a", "au": "#f5bf30", "au_l": "#ffe066", "au_hi": "#fff6c8",
     "mouth": "#e8707a", "mouth_d": "#b84858",
+    "beak": "#f59630", "beak_l": "#ffc45e", "beak_d": "#d2601c",
     "tal_d": "#5c2c1c", "tal": "#8e5032", "tal_l": "#c07a4c",
     "red": "#e8382a", "flame": "#ff8a24", "spark": "#ffe680",
 }
@@ -122,19 +125,87 @@ def paste_part(layer, src, poly, a_src, a_dst, scale=1.0, angle=0.0, flip=False)
     layer.alpha_composite(out)
 
 
-def fire_grade(img, mask, center, radius, stops, pos=0.3):
+def paste_axis(layer, src, poly, root, tip, a_dst, along=1.0, across=1.0, angle=0.0, flip=False):
+    """Like paste_part, but stretches the part along its own root -> tip axis (reference px):
+    `along` lengthens the feathers into long blades, `across` widens the fan. Then mirror / rotate
+    (degrees, counter-clockwise) and composite with root on a_dst."""
+    m = poly_mask(poly)
+    part = np.array(src).copy()
+    part[..., 3] = np.where(m, part[..., 3], 0)
+    u = np.array(tip, float) - np.array(root, float)
+    u /= np.hypot(*u)
+    S = along * np.outer(u, u) + across * (np.eye(2) - np.outer(u, u))
+    th = np.radians(angle)
+    A = np.array([[np.cos(th), np.sin(th)], [-np.sin(th), np.cos(th)]]) @ np.diag([-1.0 if flip else 1.0, 1.0]) @ S
+    Ai = np.linalg.inv(A)
+    off = np.array(R(*root)) - Ai @ np.array(R(*a_dst))
+    im = Image.fromarray(part, "RGBA").convert("RGBa")
+    out = im.transform(layer.size, Image.AFFINE, (Ai[0, 0], Ai[0, 1], off[0], Ai[1, 0], Ai[1, 1], off[1]),
+                       resample=Image.BICUBIC).convert("RGBA")
+    layer.alpha_composite(out)
+
+
+def fire_grade(img, mask, center, radius, stops, pos=0.3, shift=0.0, ink=None):
     """Recolour masked pixels through colour stops by luminance mixed with closeness to center
-    (reference px): far pixels (feather tips) take the dark end, pixels near the root the hot end."""
-    a = np.array(img).astype(np.float64)
-    lum = (0.299 * a[..., 0] + 0.587 * a[..., 1] + 0.114 * a[..., 2]) / 255
+    (reference px): far pixels (feather tips) take the dark end, pixels near the root the hot end.
+    `shift` moves the whole layer along the stops (negative = towards the dark crimson end)."""
+    a = np.array(img)
+    ys, xs = np.nonzero(mask)
+    if not len(ys):
+        return
+    px = a[ys, xs, :3].astype(np.float64)
+    lum = (0.299 * px[:, 0] + 0.587 * px[:, 1] + 0.114 * px[:, 2]) / 255
     cx, cy = R(*center)
-    yy, xx = np.mgrid[0:a.shape[0], 0:a.shape[1]]
-    near = 1 - np.clip(np.hypot(xx - cx, yy - cy) / radius, 0, 1)
-    t = np.clip((1 - pos) * lum + pos * near, 0, 1)[mask]
+    near = 1 - np.clip(np.hypot(xs - cx, ys - cy) / radius, 0, 1)
+    t = np.clip((1 - pos) * lum + pos * near + shift, 0, 1)
     cols = np.array([dk.hexrgba(c)[:3] for c in stops], np.float64)
     q = np.linspace(0, 1, len(cols))
-    a[..., :3][mask] = np.stack([np.interp(t, q, cols[:, k]) for k in range(3)], -1)
-    img.paste(Image.fromarray(a.clip(0, 255).astype(np.uint8), "RGBA"))
+    new = np.stack([np.interp(t, q, cols[:, k]) for k in range(3)], -1)
+    if ink is not None:   # the line art stays line art (dark enough for the pixelizer's ink pass)
+        new[rgb2lab(px)[:, 0] < 34] = dk.hexrgba(ink)[:3]
+    a[ys, xs, :3] = new.clip(0, 255).astype(np.uint8)
+    img.paste(Image.fromarray(a, "RGBA"))
+
+
+def _box_sum(a, r):
+    """Sum of a over a (2r+1) x (2r+1) box around every pixel (integral image, edges clamped)."""
+    c = np.pad(a, ((r + 1, r), (r + 1, r))).cumsum(0).cumsum(1)
+    return c[2 * r + 1:, 2 * r + 1:] - c[:-2 * r - 1, 2 * r + 1:] - c[2 * r + 1:, :-2 * r - 1] + c[:-2 * r - 1, :-2 * r - 1]
+
+
+def strip_edge_ink(back, body, r=8, dark=42.0, reach=(20, 44)):
+    """The stretched copies carry the original's line art scaled up, so their silhouette edge and
+    feather tips turn into 2-3 px slabs of outline once pixelized. Repaint the dark line art of
+    `back` that lies within r art px of the final silhouette with the surrounding feather colour;
+    the pixelizer then draws one clean 1 px outline ring around everything. Inner feather lines
+    stay."""
+    a = np.array(back)
+    full = (a[..., 3] >= 128) | (np.array(body)[..., 3] >= 128)
+    ys, xs = np.nonzero(full)
+    y0, y1 = max(0, ys.min() - r - 2), min(full.shape[0], ys.max() + r + 3)
+    x0, x1 = max(0, xs.min() - r - 2), min(full.shape[1], xs.max() + r + 3)
+    sub = a[y0:y1, x0:x1].astype(np.float64)
+    f = full[y0:y1, x0:x1].astype(np.float64)
+    band = (f > 0) & (_box_sum(f, r) < (2 * r + 1) ** 2 - 0.5)
+    op = sub[..., 3] >= 128
+    L = np.zeros(op.shape)
+    L[op] = rgb2lab(sub[op][:, :3])[:, 0]
+    ink = op & (L < dark)
+    tgt = band & ink
+    if not tgt.any():
+        return
+    w = (op & ~ink).astype(np.float64)
+    out = sub.copy()
+    todo = tgt.copy()
+    for rr in reach:
+        ws = _box_sum(w, rr)
+        ok = todo & (ws > 0)
+        for k in range(3):
+            cs = _box_sum(sub[..., k] * w, rr)
+            out[..., k][ok] = cs[ok] / ws[ok]
+        todo &= ~ok
+    a[y0:y1, x0:x1, :3] = out[..., :3].clip(0, 255).astype(np.uint8)
+    back.paste(Image.fromarray(a, "RGBA"))
 
 
 # ------------------------------------------------------------- compose ----
@@ -152,11 +223,26 @@ def stage2(img, ctx):
     return dk.behind(img, back)
 
 
-WING3 = ["#2a0612", "#6a0e1e", "#a8162a", "#d8282a", "#f2502a", "#fb8a2c", "#ffc244", "#ffe680"]
+WING3 = ["#8a1022", "#b81a2a", "#de2e2a", "#f2562a", "#fb8a2c", "#ffc244", "#ffe680"]
+WING3_INK = "#3a0a18"
 BEAK_POLY = [(680, 500), (772, 500), (778, 560), (752, 592), (698, 592), (676, 552)]
 LEGS_POLY = [(470, 842), (600, 838), (615, 870), (745, 845), (775, 945), (455, 945)]
 CREST3 = ["#3a0a14", "#b0202a", "#ee5a24", "#ff9a2c", "#ffcf48", "#ffee98", "#fffbe8"]
 BODY3 = ["#4a0a18", "#9c1626", "#dc2c26", "#f4641e", "#fca22c", "#ffd858", "#fff4b8"]
+
+
+WROOT, WTIP = (515, 685), (330, 290)     # near wing's own axis (reference px)
+# (anchor, along, across, angle, flip, heat): heat < 0 pushes a layer towards crimson
+WINGS3 = [
+    ((752, 668), 1.45, 0.95, 8, True, -0.08),    # far wing, outer primaries
+    ((748, 676), 1.22, 1.00, 16, True, 0.04),      # far wing, inner
+    ((540, 668), 1.85, 0.95, 12, False, -0.08),   # near wing, outer primaries
+    ((536, 680), 1.60, 1.05, 0, False, -0.12),    # near wing, middle
+    ((530, 690), 1.25, 1.00, -12, False, 0.10),   # near wing, inner coverts
+]
+
+
+STRIP_R = 8   # art px of line art repainted along the silhouette of the new parts
 
 
 def stage3(img, ctx):
@@ -168,17 +254,18 @@ def stage3(img, ctx):
 
     back = dk.blank(img)
     paste_part(back, src, TAIL_POLY, (470, 840), (470, 834), (1.28, 1.08), -4)    # longer tail
-    # massive raised wings in a crimson -> orange -> gold fire gradient
-    for args in [((520, 690), (750, 714), 1.65, 34, True), ((520, 690), (520, 724), 1.7, -10, False)]:
+    # raised wings: layered fans of the original wing stretched into long primaries
+    for anchor, along, across, angle, flip, heat in WINGS3:
         lay = dk.blank(img)
-        paste_part(lay, src, WING_POLY, *args[:4], flip=args[4])
-        fire_grade(lay, opaque(lay), (640, 640), 780, WING3, pos=0.42)
+        paste_axis(lay, src, WING_POLY, WROOT, WTIP, anchor, along, across, angle, flip)
+        fire_grade(lay, opaque(lay), (640, 660), 760, WING3, pos=0.42, shift=heat, ink=WING3_INK)
         back.alpha_composite(lay)
     # white-hot flame crest rising behind the head
     crest = dk.blank(img)
-    paste_part(crest, src, CREST_POLY, (640, 430), (640, 430), 1.5, 2)
-    fire_grade(crest, opaque(crest), (650, 440), 420, CREST3, pos=0.3)
+    paste_part(crest, src, CREST_POLY, (650, 430), (650, 430), 1.38, -16)
+    fire_grade(crest, opaque(crest), (650, 440), 420, CREST3, pos=0.3, shift=0.08, ink=WING3_INK)
     back.alpha_composite(crest)
+    strip_edge_ink(back, src, r=STRIP_R)
     return dk.behind(src, back)
 
 
@@ -271,11 +358,134 @@ def despeckle(art, ctx, max_area=30):
             yy, xx = np.clip(ys + dy, 0, N - 1), np.clip(xs + dx, 0, N - 1)
             nb.append(flat[yy * N + xx])
         nb = np.concatenate(nb)
-        nb = nb[(nb != c) & (nb != TRANSPARENT) & (nb != k_ink)]
+        nb = nb[(nb != c) & (nb != TRANSPARENT)]
+        if len(nb) and (nb == k_ink).all():      # a muted dot inside line art is line art
+            flat[region] = k_ink
+            continue
+        nb = nb[nb != k_ink]
         nb = nb[~odd[nb]] if (~odd[nb]).any() else nb
         if len(nb):
             vals, cnt = np.unique(nb, return_counts=True)
             flat[region] = vals[cnt.argmax()]
+
+
+def face_edge(art, ctx):
+    """Re-ink the right cheek where the far wing sits right behind it: the soft painted edge
+    pixelizes into tan / mauve / pink pixels with no outline, so the cream face bleeds into the wing."""
+    lab = pal_lab(art)
+    chroma = np.hypot(lab[:, 1], lab[:, 2])
+    is_cream = np.r_[(lab[:, 0] > 78) & (chroma < 30), False]
+    cream = is_cream[art.idx]
+    x0, y0 = SP(ctx, 826, 420)
+    x1, y1 = SP(ctx, 910, 640)
+    yy, xx = np.mgrid[0:N, 0:N] + 0.5
+    zone = (xx >= x0) & (xx < x1) & (yy >= y0) & (yy < y1)
+    for e in EYES:   # never touch the eye itself
+        cx, cy, rx, ry, _ = eye_geom(ctx, e)
+        zone &= ~m_ellipse(cx, cy, rx + 1.5, ry + 2.5)
+    k_ink = art.names["outline"]
+    edge = zone & grow4(cream) & ~cream & (art.idx != TRANSPARENT) & (art.idx != k_ink)
+    art.idx[edge] = k_ink
+    # tan strips running along the new line (between the brow and the wing) join it
+    tan = np.r_[(chroma < 50) & (lab[:, 0] > 40) & (lab[:, 0] <= 78), False]
+    for _ in range(4):
+        ext = zone & grow4(edge) & tan[art.idx]
+        if not ext.any():
+            break
+        art.idx[ext] = k_ink
+        edge |= ext
+    # where the cheek edge runs near-vertically, keep exactly one ink pixel between face and wing
+    wing = np.r_[(chroma >= 45) & (lab[:, 0] >= 40), False]
+    _, ya = SP(ctx, 0, 420)
+    _, yb = SP(ctx, 0, 592)
+    for y in range(int(np.ceil(ya)), int(np.floor(yb))):
+        xs = [x for x in range(int(np.floor(x0)), int(np.ceil(x1))) if zone[y, x]]
+        if not xs:
+            continue
+        xe = next((x for x in xs if not cream[y, x] and cream[y, x - 1]), None)
+        if xe is None:
+            continue
+        xw = next((x for x in range(xe + 1, min(N, xe + 5)) if wing[art.idx[y, x]]), None)
+        if xw is None:
+            continue
+        art.idx[y, xe] = k_ink
+        art.idx[y, xe + 1:xw] = art.idx[y, xw]
+        # a darker shadow pixel hugging the line doubles it: take the wing colour beyond
+        c, c2 = art.idx[y, xw], art.idx[y, min(N - 1, xw + 1)]
+        if c2 >= 0 and wing[c2] and lab[c, 0] < lab[c2, 0] - 6:
+            art.idx[y, xe + 1:xw + 1] = c2
+    # smooth the contour: rows whose edge bulges 2+ px past the local median (a light rim
+    # between face and wing that pixelized as cream) are pulled back onto the median line
+    rows = list(range(int(np.ceil(ya)), int(np.floor(yb))))
+    E = {}
+    for y in rows:
+        xs = [x for x in range(int(np.floor(x0)), int(np.ceil(x1))) if cream[y, x]]
+        if xs and zone[y, max(xs) + 1]:
+            E[y] = max(xs) + 1
+    cream_k = skin(art)
+    for y, e in list(E.items()):
+        near = sorted(E[v] for v in range(y - 3, y + 4) if v in E)
+        med = near[len(near) // 2]
+        if e - med < 2:
+            continue
+        xw = next((x for x in range(e, min(N, e + 4)) if wing[art.idx[y, x]]), None)
+        if xw is None:
+            continue
+        art.idx[y, med + 1:xw] = art.idx[y, xw]
+        art.idx[y, med] = k_ink
+        for x in range(med - 3, med):
+            if zone[y, x] and art.idx[y, x] == k_ink:
+                art.idx[y, x] = cream_k
+    # ink dots stranded inside the cheek (3+ cream neighbours) are cheek
+    cream = is_cream[art.idx]
+    pc = np.pad(cream, 1)
+    n_cream = pc[:-2, 1:-1].astype(int) + pc[2:, 1:-1] + pc[1:-1, :-2] + pc[1:-1, 2:]
+    wing_px = wing[art.idx] & (art.idx != TRANSPARENT)
+    pw = np.pad(wing_px, 1)
+    by_wing = np.any([pw[1 + dy:N + 1 + dy, 1 + dx:N + 1 + dx]
+                      for dy in (-1, 0, 1) for dx in (-1, 0, 1) if dy or dx], axis=0)
+    art.idx[zone & (art.idx == k_ink) & (n_cream >= 3) & ~by_wing] = cream_k
+    # lone ink specks left in the wing next to the line
+    ink = art.idx == k_ink
+    p = np.pad(ink, 1)
+    lone = zone & ink & ~np.any([p[1 + dy:N + 1 + dy, 1 + dx:N + 1 + dx]
+                                 for dy in (-1, 0, 1) for dx in (-1, 0, 1) if dy or dx], axis=0)
+    for y, x in zip(*np.nonzero(lone)):
+        nb = [art.idx[y + dy, x + dx] for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1))]
+        nb = [c for c in nb if c >= 0 and wing[c]]
+        if nb:
+            art.idx[y, x] = max(set(nb), key=nb.count)
+    # muted leftovers one pixel further out take the colour of the wing next to them
+    muted = np.r_[(chroma < 45) | (lab[:, 0] < 40), False]
+    for y, x in zip(*np.nonzero(zone & grow4(edge) & ~cream & muted[art.idx] & (art.idx != k_ink))):
+        win = art.idx[max(0, y - 2):y + 3, max(0, x - 2):x + 3].ravel()
+        win = win[(win >= 0) & (win != k_ink) & ~muted[win] & ~is_cream[win]]
+        if len(win):
+            vals, cnt = np.unique(win, return_counts=True)
+            art.idx[y, x] = vals[cnt.argmax()]
+
+
+def lone_pixels(art, jump=25.0):
+    """Single pixels that share their colour with none of their 8 neighbours and differ clearly
+    from all of them (dots of line art or shadow left by the downscale) take the most common
+    neighbouring colour. Runs before the hand-placed details, which are allowed single pixels."""
+    lab = pal_lab(art)
+    idx = art.idx
+    out = idx.copy()
+    for y in range(1, N - 1):
+        for x in range(1, N - 1):
+            c = idx[y, x]
+            if c == TRANSPARENT:
+                continue
+            win = idx[y - 1:y + 2, x - 1:x + 2].ravel()
+            if (win == TRANSPARENT).any() or (win == c).sum() > 1:
+                continue
+            nb = np.delete(win, 4)
+            if np.min(np.linalg.norm(lab[nb] - lab[c], axis=1)) <= jump:
+                continue
+            vals, cnt = np.unique(nb, return_counts=True)
+            out[y, x] = vals[cnt.argmax()]
+    art.idx[:] = out
 
 
 # ------------------------------------------------------------------ talons ----
@@ -486,7 +696,7 @@ def draw_iqx(art, ctx, stage):
     y0 = int(round(yc - 2.5))
     # clean blue field behind the letters
     box = np.zeros((N, N), bool)
-    box[y0 - 1:y0 + 6, x0 - 2:x0 + w + 2] = True
+    box[y0 - 2:y0 + 8, x0 - 2:x0 + w + 2] = True
     pal = np.array(art.palette)
     lab = pal_lab(art)
     pale = np.r_[(pal[:, 2] >= pal[:, 0] - 10) & (lab[:, 0] > 55), False][art.idx]
@@ -498,39 +708,41 @@ def draw_iqx(art, ctx, stage):
 
 
 # ---------------------------------------------------------- stage 3 regalia ----
+def _crown_rows():
+    rows = [
+        "...........o...........",
+        "..........oHo..........",
+        "...o......oLo......o...",
+        "..oHo....oLYDo....oHo..",
+        "..oLo....oLYDo....oLo..",
+        "..oYo...oLYYYDo...oYo..",
+        ".oLYDo..oLYYYDo..oLYDo.",
+        ".oLYDo.oLYYoYYDo.oLYDo.",
+        "oLLYYDooLYYYYYDooLYYDDo",
+        "oLYYYYDoLYYYYYDoLYYYYDo",
+        "oHHHHHHHHHHHHHHHHHHHHHo",
+        "oYYrYYYYYYYYYYYYYYYrYYo",
+        "oDDDDDDDDDDDDDDDDDDDDDo",
+        ".ooooooooooooooooooooo.",
+    ]
+    gem = {8: (10, "obo"), 9: (9, "obBno"), 10: (9, "obBno"), 11: (10, "ono"), 12: (11, "o")}
+    for r, (c, g) in gem.items():
+        rows[r] = rows[r][:c] + g + rows[r][c + len(g):]
+    return rows
+
+
+CROWN = _crown_rows()
+CROWN_KEY = {"o": P["ink"], "H": P["au_hi"], "L": P["au_l"], "Y": P["au"], "D": P["au_d"],
+             "b": P["blue_l"], "B": P["blue"], "n": P["blue_d"], "r": P["red"]}
+
+
 def draw_crown(art, ctx):
-    """Golden crown on the crest base: three flame spikes, a royal-blue gem in the middle."""
+    """Golden crown on the crest base: five points with pearl tips, a royal-blue diamond set in the
+    band (the IQX blue), two ruby studs."""
     cx, cy = SP(ctx, 722, 352)
-    cx = np.floor(cx) + 0.5
-    s = ctx.scale / 0.1848
-    W = 13 * s
-    yy, xx = np.mgrid[0:N, 0:N] + 0.5
-    # band follows the head's curve: ends sit lower
-    u = (xx - cx) / W
-    btop = cy - 1.2 + 1.6 * u ** 2
-    band = (np.abs(u) <= 1) & (yy >= btop) & (yy < btop + 4.2)
-    spikes = np.zeros((N, N), bool)
-    for fx, h, hw in [(-0.7, 8.0, 3.2), (0.0, 12.5, 4.2), (0.7, 8.0, 3.2)]:
-        sx = cx + fx * W
-        base = cy - 1.2 + 1.6 * fx ** 2
-        r = (base - yy) / h
-        spikes |= (r >= 0) & (r <= 1) & (np.abs(xx - sx) <= hw * (1 - r) + 0.3)
-    M = band | spikes
-    paint(art, ring(M), "ink")
-    paint(art, M, "au")
-    paint(art, M & (xx < cx - 0.2) & spikes, "au_l")
-    paint(art, band & (yy < btop + 1), "au_hi")
-    paint(art, band & (yy >= btop + 3.0), "au_d")
-    for fx in (-0.7, 0.7):
-        sx = cx + fx * W
-        paint(art, spikes & ~band & (xx > sx + 0.2), "au_d")
-    # centre gem
-    G = m_diamond(cx, cy - 4.6, 2.6, 3.8)
-    paint(art, ring(G), "ink")
-    paint(art, G, "blue")
-    paint(art, G & (xx < cx) & (yy < cy - 4.6), "blue_l")
-    paint(art, G & (xx > cx) & (yy > cy - 4.6), "blue_d")
-    art.put(int(cx - 1), int(cy - 7), P["blue_hi"])
+    x0 = int(np.floor(cx)) - len(CROWN[0]) // 2
+    y0 = int(np.floor(cy)) + 4 - len(CROWN)
+    art.blit(x0, y0, CROWN, CROWN_KEY)
 
 
 def draw_gorget(art, ctx):
@@ -569,46 +781,55 @@ def draw_gorget(art, ctx):
     draw_gem(art, ctx, (704, 742), 40, 54)
 
 
-def fix_mouth(art, ctx):
-    """The open beak's pink lining tends to fall into a brown cluster: repaint it."""
-    m = m_poly([SP(ctx, x, y) for x, y in [(694, 548), (752, 548), (744, 580), (712, 584)]])
-    lab = pal_lab(art)
-    pal = np.array(art.palette)
-    brownish = np.r_[(lab[:, 0] < 62) & (pal[:, 0] > pal[:, 2] + 20), False][art.idx]
+BEAK_UP = [(688, 533), (712, 516), (735, 508), (752, 510), (763, 521), (768, 541), (765, 552), (735, 552),
+           (707, 545)]
+BEAK_LO = [(703, 547), (763, 553), (750, 563), (736, 577), (721, 576)]
+
+
+def despur(m):
+    """Drop one-pixel spurs (pixels with at most one 4-neighbour) from a mask."""
+    m = m.copy()
+    for _ in range(3):
+        p = np.pad(m, 1)
+        nb = p[:-2, 1:-1].astype(int) + p[2:, 1:-1] + p[1:-1, :-2] + p[1:-1, 2:]
+        spur = m & (nb <= 1)
+        if not spur.any():
+            break
+        m &= ~spur
+    return m
+
+
+def draw_beak(art, ctx):
+    """Redraw the small open beak as clean pixels: orange upper beak with a lit top and a shaded
+    lower edge, pink mouth below, one ink line around and between them."""
+    up = despur(m_poly([SP(ctx, x, y) for x, y in BEAK_UP]))
+    lo = despur(m_poly([SP(ctx, x, y) for x, y in BEAK_LO]) & ~up)
+    both = up | lo
+    k_skin = skin(art)
     k_ink = art.names["outline"]
-    tgt = m & brownish & (art.idx != k_ink)
-    yy = np.mgrid[0:N, 0:N][0]
-    if tgt.any():
-        y0 = yy[tgt].min()
-        paint(art, tgt & (yy <= y0), "mouth_d")
-        paint(art, tgt & (yy > y0), "mouth")
+    near = grow4(grow4(both))
+    art.idx[near & ~both & (art.idx != TRANSPARENT) & (art.idx != k_ink)] = k_skin
+    art.idx[near & ~both & (art.idx == k_ink)] = k_skin
+    yy, xx = np.mgrid[0:N, 0:N]
+    ys, xs = np.nonzero(up)
+    top = {x: ys[xs == x].min() for x in set(xs.tolist())}
+    bot = {x: ys[xs == x].max() for x in set(xs.tolist())}
+    paint(art, up, "beak")
+    hx0 = xs.min() + 0.45 * (xs.max() - xs.min())
+    for x in top:
+        if x >= hx0 and bot[x] - top[x] >= 3:
+            art.put(x, top[x] + 1, P["beak_l"])
+        if x > xs.min() + 1:
+            art.put(x, bot[x], P["beak_d"])
+    paint(art, lo, "mouth")
+    ly, lx = np.nonzero(lo)
+    if len(ly):
+        paint(art, lo & (yy == ly.min()), "mouth_d")
+    paint(art, ring(both), "ink")
+    paint(art, ring(up) & lo, "ink")   # the mouth line under the upper beak
 
 
 SKY = 9   # the demo keeps the top 8 sprite rows as empty sky: nothing is drawn above this row
-
-
-def draw_aura(art, top=150):
-    """Divine-fire aura: a two-step crimson glow just outside the outline of the upper silhouette,
-    with short flame tongues rising from the local peaks (wing tips, crest)."""
-    M = art.idx != TRANSPARENT
-    yy = np.mgrid[0:N, 0:N][0]
-    a1 = ring(M) & (yy < top) & (yy >= SKY)
-    a2 = ring(M | a1) & (yy < top - 12) & (yy >= SKY)
-    # tongues: above each local peak of the silhouette top
-    tops = np.array([np.argmax(M[:, x]) if M[:, x].any() else N for x in range(N)])
-    tongues = np.zeros((N, N), bool)
-    for x in range(3, N - 3):
-        t = tops[x]
-        if t < top - 20 and t == tops[x - 3:x + 4].min() and t <= tops[x - 1] and t < tops[x + 1] + 1:
-            h = 4 if t > 20 else 3
-            for k in range(1, h + 1):
-                y = t - 1 - k
-                hw = int((h - k) // 2)
-                if y >= SKY:
-                    tongues[y, x - hw:x + hw + 1] = True
-    tongues &= ~M
-    art.idx[(a2 | tongues) & ~M & (art.idx == TRANSPARENT)] = art.color("#5c0c1e")
-    art.idx[a1 & (art.idx == TRANSPARENT)] = art.color("#a01828")
 
 
 def sparkle(art, x, y, size=1):
@@ -618,31 +839,33 @@ def sparkle(art, x, y, size=1):
         pts += [(dx, dy, "red") for dx, dy in ((2, 0), (-2, 0), (0, 2), (0, -2))]
         pts[0] = (0, 0, "white")
     for dx, dy, c in pts:
-        if 0 <= x + dx < N and 0 <= y + dy < N and art.idx[y + dy, x + dx] == TRANSPARENT:
+        if 0 <= x + dx < N and SKY <= y + dy < N and art.idx[y + dy, x + dx] == TRANSPARENT:
             art.put(x + dx, y + dy, P[c])
 
 
 SPARKS = {
     1: [],
     2: [(40, 70, 1), (150, 64, 1), (176, 96, 1), (16, 118, 1)],
-    3: [(8, 30, 2), (184, 24, 1), (100, 12, 1), (176, 152, 2), (6, 100, 1), (64, 14, 1)],
+    3: [(40, 12, 2), (66, 18, 1), (112, 14, 1), (156, 14, 2), (186, 24, 1), (6, 100, 1), (178, 152, 2)],
 }
 
 
 # ---------------------------------------------------------------- touchup ----
 def touchup(stage, art, ctx):
     despeckle(art, ctx)
+    despeckle(art, ctx)    # islands folded into another muted island get a second chance
+    lone_pixels(art)
     draw_feet(art, ctx)
     for e in EYES:
         clean_eye_area(art, *eye_geom(ctx, e)[:4])
     for e in EYES:
         draw_eye(art, ctx, stage, e)
     draw_iqx(art, ctx, stage)
-    fix_mouth(art, ctx)
+    draw_beak(art, ctx)
+    face_edge(art, ctx)
     if stage == 3:
         draw_gorget(art, ctx)
         draw_crown(art, ctx)
-        draw_aura(art)
     else:
         draw_gem(art, ctx)
     for x, y, size in SPARKS[stage]:

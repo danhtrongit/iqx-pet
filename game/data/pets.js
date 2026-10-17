@@ -30,7 +30,7 @@ window.IQX_PETS = [
         "rank": "Trưởng thành",
         "name": "Thanh Long Lưu Thủy",
         "level": 10,
-        "desc": "Đôi sừng vàng nhú lên khi nó đọc được dòng tiền khối ngoại và tự doanh. Chiếc đuôi vây cuộn sóng, dẫn thanh khoản chảy theo ý mình.",
+        "desc": "Đôi sừng vàng nhú lên khi nó đọc được dòng tiền khối ngoại và tự doanh. Vây nước mọc dọc đuôi, cuộn sóng dẫn thanh khoản chảy theo ý mình.",
         "skill": {
           "name": "Xoáy Thủy Lưu",
           "desc": "Cuộn dòng tiền thành xoáy nước, hút thanh khoản của đối thủ và gây sát thương theo khối lượng giao dịch."
@@ -48,7 +48,7 @@ window.IQX_PETS = [
         "rank": "Thần thú",
         "name": "Thanh Long Vương",
         "level": 25,
-        "desc": "Vua của mọi dòng chảy. Long châu soi thấu từng dòng vốn lớn trước khi thị trường kịp phản ứng; rồng bay đến đâu, mây lành và thanh khoản hội tụ đến đó.",
+        "desc": "Vua của mọi dòng chảy: sừng vàng uy nghi, bờm rực lửa xanh. Long châu soi thấu dòng vốn lớn trước khi thị trường kịp phản ứng; rồng đến đâu, mây lành và thanh khoản hội tụ đến đó.",
         "skill": {
           "name": "Long Châu Hội Lưu",
           "desc": "Long châu gom mọi dòng vốn lớn thành cột nước thần, gây sát thương diện rộng và đánh dấu điểm gom hàng của cá mập."
@@ -112,7 +112,7 @@ window.IQX_PETS = [
         "rank": "Thần thú",
         "name": "Thần Lộc Thiên Nhãn",
         "level": 25,
-        "desc": "Thần thú mang Thiên Nhãn giữa trán, nhìn thấu mọi giao dịch nội bộ trước khi thị trường kịp hay biết. Con mắt thứ ba ấy không bao giờ khép lại.",
+        "desc": "Thần thú đội vương miện gạc vàng đầu pha lê, khoác áo choàng sao trời. Thiên Nhãn giữa trán nhìn thấu mọi giao dịch nội bộ trước khi thị trường kịp hay biết, và con mắt ấy không bao giờ khép lại.",
         "skill": {
           "name": "Thiên Nhãn Khai Mở",
           "desc": "Soi thấu toàn bộ giao dịch của người trong cuộc, lật tẩy đợt xả hàng ngầm: đối thủ bị lộ diện mất 30% phòng thủ."
@@ -176,7 +176,7 @@ window.IQX_PETS = [
         "rank": "Thần thú",
         "name": "Thần Hỏa Phượng Hoàng",
         "level": 25,
-        "desc": "Thần điểu đội vương miện vàng, sải cánh lửa che kín trời, tái sinh sau mọi cơn bão tin. Tiếng hót của Người báo trước biến động lớn của thị trường.",
+        "desc": "Thần điểu đội vương miện vàng, giương đôi cánh lửa rợp trời, tái sinh sau mọi cơn bão tin. Mỗi tiếng hót của thần điểu đều báo trước một biến động lớn của thị trường.",
         "skill": {
           "name": "Niết Bàn Thần Hỏa",
           "desc": "Hóa biển lửa thiêng soi rõ mọi dòng tin: tái sinh đầy máu một lần mỗi trận, cả đội tăng 30% công trong 3 lượt."
@@ -204,16 +204,16 @@ window.IQX_PETS = [
         "rank": "Ấu thể",
         "name": "Tiểu Quy",
         "level": 1,
-        "desc": "",
+        "desc": "Chú rùa con đội mầm lá, chậm rãi lật từng trang báo cáo tài chính. Mầm chỉ nhú thêm khi chú tìm ra một doanh nghiệp đang bị thị trường định giá thấp hơn giá trị thật.",
         "skill": {
-          "name": "",
-          "desc": ""
+          "name": "Soi Giá Trị",
+          "desc": "Đọc vị P/E, P/B của đối thủ: lộ giá trị thật, giảm 15% phòng thủ của mục tiêu trong 2 lượt."
         },
         "stats": {
-          "hp": 46,
-          "atk": 24,
-          "def": 44,
-          "spd": 18
+          "hp": 48,
+          "atk": 26,
+          "def": 46,
+          "spd": 20
         },
         "sprite": "sprites/kim-quy-1.png",
         "blink": "sprites/kim-quy-1-blink.png"
@@ -222,16 +222,16 @@ window.IQX_PETS = [
         "rank": "Trưởng thành",
         "name": "Ngọc Quy",
         "level": 10,
-        "desc": "",
+        "desc": "Mai hóa ngọc bích mọc gai, từng mảnh lục giác viền vàng khắc một mô hình định giá: P/E, P/B, DCF. Mầm non đã thành cây con, mỗi thương vụ có biên an toàn dày lại mọc thêm một lá.",
         "skill": {
-          "name": "",
-          "desc": ""
+          "name": "Khiên Biên An Toàn",
+          "desc": "Dựng khiên ngọc lục giác hấp thụ sát thương bằng 30% máu tối đa; mua càng dưới giá trị nội tại, khiên càng dày."
         },
         "stats": {
-          "hp": 72,
-          "atk": 48,
-          "def": 74,
-          "spd": 30
+          "hp": 76,
+          "atk": 50,
+          "def": 78,
+          "spd": 32
         },
         "sprite": "sprites/kim-quy-2.png",
         "blink": "sprites/kim-quy-2-blink.png"
@@ -240,16 +240,16 @@ window.IQX_PETS = [
         "rank": "Thần thú",
         "name": "Kim Quy Thần Kiếm",
         "level": 25,
-        "desc": "",
+        "desc": "Thần Quy Hồ Gươm nghìn tuổi: mai vàng khắc ngọc phù rực sáng, gươm Thuận Thiên đeo chéo sau lưng, cây thế cổ trên mai treo đầy tiền vàng. Ngài định giá mọi doanh nghiệp không sai một đồng.",
         "skill": {
-          "name": "",
-          "desc": ""
+          "name": "Thuận Thiên Định Giá",
+          "desc": "Vung gươm Thuận Thiên kéo mọi mục tiêu về đúng giá trị thật: đòn đánh xuyên phòng thủ, sát thương bằng khoảng chênh giữa giá và giá trị."
         },
         "stats": {
-          "hp": 98,
-          "atk": 80,
-          "def": 96,
-          "spd": 42
+          "hp": 100,
+          "atk": 84,
+          "def": 100,
+          "spd": 46
         },
         "sprite": "sprites/kim-quy-3.png",
         "blink": "sprites/kim-quy-3-blink.png"

@@ -43,8 +43,8 @@ STAGES = [
      "stats": {"hp": 62, "atk": 55, "def": 50, "spd": 74}},
     {"rank": "Thần thú", "name": "Thần Lộc Thiên Nhãn", "level": 25, "height": 146,
      "config": {**CFG, "colors": 30},
-     "desc": "Thần thú mang Thiên Nhãn giữa trán, nhìn thấu mọi giao dịch nội bộ trước khi thị trường kịp hay "
-             "biết. Con mắt thứ ba ấy không bao giờ khép lại.",
+     "desc": "Thần thú đội vương miện gạc vàng đầu pha lê, khoác áo choàng sao trời. Thiên Nhãn giữa trán nhìn "
+             "thấu mọi giao dịch nội bộ trước khi thị trường kịp hay biết, và con mắt ấy không bao giờ khép lại.",
      "skill": {"name": "Thiên Nhãn Khai Mở",
                "desc": "Soi thấu toàn bộ giao dịch của người trong cuộc, lật tẩy đợt xả hàng ngầm: "
                        "đối thủ bị lộ diện mất 30% phòng thủ."},
@@ -65,9 +65,8 @@ BASE = {
 EXTRA = {
     "gold_dd": "#8a4a0c", "gold_d": "#c87c14", "gold": "#f2b230", "gold_l": "#ffdc60", "gold_hi": "#fff6c8",
     "leaf_d": "#2f7a4a", "leaf": "#4cae62", "leaf_l": "#9ee07e",
-    "petal": "#ffc4d6", "petal_d": "#f08aac",
     "glow": "#fff1a8", "star": "#ffffff",
-    "aqua": "#7fe3ff",
+    "aqua": "#8ee8ff", "aqua_d": "#3d9ee6",
 }
 NAMES = list(BASE) + list(EXTRA)
 K_INK = len(NAMES)
@@ -324,6 +323,21 @@ def curve(pts, n=64):
     return dk.bezier(pts, n)
 
 
+def spline(pts, n=64):
+    """Catmull-Rom curve through every point (beams that must bend where they are told to)."""
+    p = np.asarray(pts, np.float64)
+    p = np.vstack([2 * p[0] - p[1], p, 2 * p[-1] - p[-2]])
+    seg = len(p) - 3
+    out = []
+    for i in range(seg):
+        p0, p1, p2, p3 = p[i:i + 4]
+        for t in np.linspace(0, 1, max(2, n // seg), endpoint=(i == seg - 1)):
+            t2, t3 = t * t, t * t * t
+            q = 0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (3 * p1 - p0 - 3 * p2 + p3) * t3)
+            out.append((float(q[0]), float(q[1])))
+    return out
+
+
 def at(pts, t):
     pts = np.asarray(pts)
     i = min(len(pts) - 1, int(round(t * (len(pts) - 1))))
@@ -332,20 +346,23 @@ def at(pts, t):
 
 # -------------------------------------------------------------- antlers ----
 ANTLER = {
-    # beam: local control points (out, up); tines: (t on beam, local control points, w0, w1)
-    2: {"beam": [(0, -22), (16, 80), (80, 150), (88, 265)], "w": (64, 24),
-        "tines": [(0.22, [(0, 0), (-22, 20), (-40, 45), (-42, 80)], 34, 16),
-                  (0.50, [(0, 0), (42, 10), (80, 36), (98, 84)], 38, 17),
-                  (0.74, [(0, 0), (-10, 34), (-16, 70), (-8, 102)], 32, 15)]},
-    3: {"beam": [(0, -22), (20, 90), (100, 170), (110, 330)], "w": (74, 26),
-        "tines": [(0.20, [(0, 0), (-26, 22), (-48, 52), (-50, 94)], 40, 18),
-                  (0.42, [(0, 0), (50, 10), (95, 40), (120, 98)], 44, 18),
-                  (0.62, [(0, 0), (-12, 40), (-20, 82), (-10, 120)], 38, 16),
-                  (0.80, [(0, 0), (36, 12), (60, 40), (70, 82)], 32, 15)]},
+    # beam: points (out, up) the beam passes through; w: (base, tip) width;
+    # tines: (t on beam, bezier control points, w0, w1)
+    # Stage 2: a young stag's lyre: the beam bows out and turns back up, a brow tine, an outer and an inner tine.
+    2: {"spline": 1, "beam": [(0, -22), (18, 62), (72, 122), (134, 170), (156, 240), (154, 322)], "w": (70, 18),
+        "tines": [(0.15, [(0, 0), (-30, 18), (-54, 46), (-58, 86)], 42, 12),
+                  (0.47, [(0, 0), (44, 10), (86, 38), (112, 92)], 44, 12),
+                  (0.77, [(0, 0), (-30, 16), (-56, 42), (-66, 80)], 36, 11)]},
+    # Stage 3: a wide crown; the beam sweeps far out and curls up, tines fan from inward to outward along it.
+    3: {"spline": 1, "beam": [(0, -22), (24, 60), (92, 128), (178, 176), (238, 246), (252, 330)], "w": (84, 20),
+        "tines": [(0.12, [(0, 0), (-32, 22), (-56, 54), (-58, 98)], 48, 13),
+                  (0.36, [(0, 0), (-8, 44), (-20, 90), (-34, 136)], 46, 13),
+                  (0.56, [(0, 0), (0, 44), (0, 90), (-10, 134)], 42, 12),
+                  (0.76, [(0, 0), (40, 22), (72, 54), (88, 100)], 38, 11)]},
 }
 
 
-def antler(base, side, s, spec, cols, tip=None):
+def antler(base, side, s, spec, cols, tip=None, tip_from=0.7):
     """Parts of one antler. side=-1 grows to the viewer's left, +1 to the right; s scales it.
     Returns (parts, centre lines [beam, tine...])."""
     bx, by = base
@@ -353,14 +370,14 @@ def antler(base, side, s, spec, cols, tip=None):
     def to(o, u, ox=bx, oy=by):
         return ox + side * o * s, oy - u * s
 
-    beam = curve([to(o, u) for o, u in spec["beam"]])
+    beam = (spline if spec.get("spline") else curve)([to(o, u) for o, u in spec["beam"]])
     w0, w1 = spec["w"]
-    parts = [flat_tube(beam, taper(w0 * s, w1 * s, 0.8), cols, tip=tip, tip_from=0.8)]
+    parts = [flat_tube(beam, taper(w0 * s, w1 * s, 1.15), cols, tip=tip, tip_from=0.82)]
     lines = [beam]
     for t, ctrl, a, b in spec["tines"]:
         ox, oy = at(beam, t)
         pts = curve([to(o, u, ox, oy) for o, u in ctrl])
-        parts.append(flat_tube(pts, taper(a * s, b * s, 0.8), cols, tip=tip))
+        parts.append(flat_tube(pts, taper(a * s, b * s, 1.2), cols, tip=tip, tip_from=tip_from))
         lines.append(pts)
     return parts, lines
 
@@ -417,25 +434,21 @@ def base_labels(stage, img):
 
 
 # ------------------------------------------------------------ additions ----
-def ribbon(pts, w, cols, trim=None, notch=0.9, twist=0.5):
-    """Scarf ribbon with a twist and a swallow-tail end: [(polygon, colour), ...]."""
-    wf = lambda t: w * (1 - 0.5 * np.exp(-((t - twist) / 0.08) ** 2)) * (0.9 + 0.25 * t)
+def streamer(pts, w0, w1, trim=True, notch=0.85):
+    """Clean wind-blown scarf tail: light band on the lit side, shadow + gold edge on the other, swallow-tail end."""
+    wf = taper(w0, w1, 1.0)
     s = light_side(pts)
     poly = strip(pts, wf)
     half = len(poly) // 2
     end = np.asarray(pts[-1])
-    back = np.asarray(pts[-6])
+    back = np.asarray(pts[-8])
     v = (back - end) / (np.hypot(*(back - end)) or 1)
-    notch_pt = tuple(end + v * w * notch)
-    poly = poly[:half] + [notch_pt] + poly[half:]
-    base, dark, light = cols
-    lay = [(poly, base)]
-    for sg, t0, t1 in ((s, 0.0, twist), (-s, twist, 0.9)):
-        lay.append((strip(pts, wf, *sorted((-sg * 1.0, -sg * 0.3)), t0=t0, t1=t1), dark))
-        lay.append((strip(pts, wf, *sorted((sg * 0.2, sg * 0.55)), t0=t0 + 0.06, t1=t1 - 0.06), light))
-        if trim:
-            lay.append((strip(pts, wf, *sorted((-sg * 1.0, -sg * 0.6)), t0=t0, t1=t1), trim[0]))
-            lay.append((strip(pts, wf, *sorted((-sg * 0.82, -sg * 0.68)), t0=t0 + 0.04, t1=t1 - 0.04), trim[1]))
+    poly = poly[:half] + [tuple(end + v * w1 * notch)] + poly[half:]
+    lay = [(poly, "blue"),
+           (strip(pts, wf, *sorted((-s * 1.0, -s * 0.35)), t0=0.0, t1=0.97), "blue_d"),
+           (strip(pts, wf, *sorted((s * 0.15, s * 0.6)), t0=0.08, t1=0.9), "blue_l")]
+    if trim:
+        lay.append((strip(pts, wf, *sorted((-s * 1.0, -s * 0.62)), t0=0.0, t1=0.96), "gold"))
     return lay
 
 
@@ -463,7 +476,7 @@ def lock(base, tip, bend, w):
     return pts, wf
 
 
-def flame_parts(pts, wf, cols, light=(0.15, 0.8), dark=0.45, tip=None):
+def flame_parts(pts, wf, cols, light=(0.15, 0.8), dark=0.45, tip=None, tip_from=0.62):
     """Cel-shaded lock; tip=(colour, colour2) paints the far end (glowing tips)."""
     s = light_side(pts)
     d, m, l, h = cols
@@ -473,65 +486,85 @@ def flame_parts(pts, wf, cols, light=(0.15, 0.8), dark=0.45, tip=None):
     if h:
         lay.append((strip(pts, wf, *sorted((s * 0.35, s * 0.65)), t0=0.3, t1=0.85), h))
     if tip:
-        lay.append((strip(pts, wf, t0=0.62, cap=True), tip[0]))
-        lay.append((strip(pts, wf, *sorted((-s * 1.0, -s * 0.2)), t0=0.66), tip[1]))
+        lay.append((strip(pts, wf, t0=tip_from, cap=True), tip[0]))
+        lay.append((strip(pts, wf, *sorted((-s * 1.0, -s * 0.2)), t0=tip_from + 0.04), tip[1]))
     return lay
 
 
-# buds on the stage 2 antlers: (antler side, centre line index, t, angle for the left antler, length)
-LEAVES = [(-1, 0, 0.40, 150, 80), (-1, 0, 0.45, 60, 66), (-1, 2, 0.55, 105, 64),
-          (1, 0, 0.42, 150, 74), (1, 0, 0.47, 62, 58), (1, 2, 0.55, 105, 60)]
-BLOSSOMS = [(-1, 3, 0.78), (1, 1, 0.85)]
-# aura ruff tufts (stage 3): base, tip, bend, width (reference px)
-RUFF = [((560, 684), (556, 792), 0.06, 54), ((596, 686), (612, 810), -0.05, 58), ((628, 682), (668, 798), -0.12, 56),
-        ((652, 668), (720, 764), -0.18, 52), ((662, 650), (744, 706), -0.2, 44)]
+# buds on the stage 2 antlers (lộc non): (centre line index, t, angle for the left antler, length)
+LEAVES = [(0, 0.55, 26, 92), (0, 0.61, 66, 80)]
+# chest mane tufts (stage 3): base, tip, bend, width (reference px)
+RUFF = [((556, 684), (548, 772), 0.05, 44), ((580, 688), (578, 794), 0.03, 48), ((606, 690), (612, 808), 0.0, 50),
+        ((632, 688), (648, 800), -0.04, 48), ((656, 680), (684, 782), -0.08, 44), ((664, 664), (712, 750), -0.12, 44),
+        ((650, 648), (696, 690), -0.22, 40)]
 SCARF_NAMES = ("blue_dd", "blue_d", "blue", "blue_l", "blue_hi")
-ANT_POS = {2: {"l": ((490, 350), 1.12), "r": ((652, 340), 1.02)},
-           3: {"l": ((490, 350), 1.0), "r": ((652, 340), 0.92)}}
+ANT_POS = {2: {"l": ((508, 344), 1.2), "r": ((640, 338), 1.08)},     # bases kept clear of the ear valleys
+           3: {"l": ((508, 344), 1.0), "r": ((640, 336), 0.92)}}
+
+
+HEAD_TOP = [(446, 352), (468, 326), (494, 308), (526, 300)]      # new head contour where the near antler sat
+EAR_TOP = [(402, 314), (426, 330), (446, 352)]                   # top edge of the left ear, up to that contour
 
 
 def head_patch(stage, lbl, ow):
-    """Rebuild the head top where the original near antler sat: fur below a new ink contour."""
-    top = curve([P(stage, *q) for q in [(444, 348), (466, 322), (492, 305), (522, 298)]])
+    """Rebuild the head top where the original near antler sat: fur below a clean 1px-ish contour that
+    continues the left ear's top edge (the original's ear/antler gap otherwise turns into an ink blob)."""
+    top = spline([P(stage, *q) for q in HEAD_TOP], 32)
+    ear = spline([P(stage, *q) for q in EAR_TOP], 16)
+    edge = ear + top[1:]
     lay = Layer()
-    lay.poly(top + [P(stage, 524, 372), P(stage, 444, 372)], "fur")
-    lay.line(top, 2 * ow + 2, "ink")
+    lay.poly(edge + [P(stage, 530, 384), P(stage, 402, 384)], "fur")
+    lay.line(edge, 2 * ow - 1, "ink")
     m = lay.labels()
     hole = ref_poly(stage, ERASE_L)
-    sel = (m >= 0) & (hole | (lbl < 0) | (m == K_INK))
-    sel &= ref_poly(stage, [(436, 290), (530, 290), (530, 375), (436, 375)])
+    # inside the erased antler: always; elsewhere only the band right under the new contour (ear shading stays)
+    band = Layer()
+    band.line(edge, 2 * ow + 34, "fur")
+    near = (band.labels() >= 0) & ((lbl < 0) | (lbl == K_INK) | (m == K_INK))
+    box = ref_poly(stage, [(398, 290), (532, 290), (532, 384), (398, 384)])
+    sel = (m >= 0) & (hole | near) & box
     lbl[sel] = m[sel]
+    # old ink just above the new contour (the original ear/antler gap) opens up so the antler behind shows
+    lbl[(band.labels() >= 0) & (m < 0) & (lbl == K_INK) & box] = -1
 
+
+# stage 2 scarf tails (reference px, spline points) and the top of the deer's own tail (ribbons pass in front)
+RIBBONS = [[(450, 612), (395, 552), (330, 508), (262, 528), (198, 552), (136, 500)],
+           [(450, 636), (390, 616), (325, 596), (262, 622), (206, 656), (148, 632)]]
+TAIL_TOP = [(236, 590), (300, 566), (362, 572), (394, 600), (394, 654), (236, 654)]
+
+# the original bow's flap (stage 3: the cape covers it)
+BOW_AREA = [(362, 606), (398, 588), (472, 588), (484, 640), (470, 658), (400, 650), (362, 624)]
+CLASP = (468, 632)
 
 # stage 3 cape (reference px): attached at the scarf knot, streaming back and up, three trailing points
-CAPE_TOP = [(455, 598), (380, 528), (280, 498), (180, 468), (92, 392)]
-CAPE_TRAIL = [(92, 392), (152, 486), (86, 530), (160, 590), (110, 650), (240, 676)]
-CAPE_BOTTOM = [(240, 676), (350, 694), (472, 668)]
-CAPE_FOLDS = [((152, 486), (112, 440)), ((160, 590), (118, 560)), ((240, 676), (170, 662))]
-CAPE_STARS = [(215, 515), (160, 560), (290, 545), (240, 610), (360, 585), (180, 640), (130, 470)]
+CAPE_TOP = [(470, 604), (404, 556), (322, 518), (236, 494), (156, 460), (102, 428)]
+CAPE_TRAIL = [(102, 428), (98, 458), (116, 482), (112, 512), (92, 536), (126, 566), (156, 588), (134, 618),
+              (122, 646), (164, 662), (204, 672), (230, 690)]
+CAPE_BOTTOM = [(230, 690), (340, 702), (474, 672)]
+CAPE_FOLDS = [(116, 482), (156, 588), (204, 672)]           # notches: dark folds run from the clasp to them
+CAPE_STARS = [(210, 520, 1), (150, 500, 0), (300, 552, 0), (236, 600, 1), (176, 632, 0), (380, 600, 0)]
 
 
 def cape(stage, layer, ow):
-    """Royal-blue starry cape with gold trim; drawn into `layer` (outline ring + clipped interior)."""
-    top = np.array(curve([P(stage, *q) for q in CAPE_TOP], 48))
-    tan = np.gradient(top, axis=0)
-    nrm = np.stack([-tan[:, 1], tan[:, 0]], 1) / np.maximum(1e-6, np.hypot(tan[:, 0], tan[:, 1]))[:, None]
-    tt = np.linspace(0, 1, len(top))
-    top = [tuple(q) for q in top + nrm * (16 * np.sin(np.pi * 2.2 * tt) * np.sin(np.pi * tt))[:, None]]
-    trail = [P(stage, *q) for q in CAPE_TRAIL]
+    """Royal-blue starry cape with gold trim, billowing back from the clasp; drawn into `layer`."""
+    top = spline([P(stage, *q) for q in CAPE_TOP], 48)
+    trail = spline([P(stage, *q) for q in CAPE_TRAIL], 64)
     bottom = curve([P(stage, *q) for q in CAPE_BOTTOM], 24)
     poly = top + trail[1:] + bottom[1:]
     t = Layer()
     t.poly(poly, "blue")
-    root = P(stage, 470, 640)
-    for a, b in CAPE_FOLDS:
-        t.poly([root, P(stage, *a), P(stage, *b)], "blue_d")
-    for a, b in CAPE_FOLDS[:2]:
-        pa, pb = np.array(P(stage, *a)), np.array(P(stage, *b))
-        t.poly([root, tuple(pb), tuple(pb + (pa - pb) * 0.25)], "blue_l")
+    root = np.array(P(stage, *CLASP))
+    for r in CAPE_FOLDS:
+        # a fold: a long dark wedge from the clasp, widest where it meets the notch in the trailing edge
+        b = np.array(P(stage, *r))
+        d = b - root
+        n = np.array([-d[1], d[0]]) / (np.hypot(*d) or 1)
+        t.poly([tuple(root), tuple(b + n * 26 - d * 0.06), tuple(b - n * 18)], "blue_d")
     edge = top + trail[1:]
-    t.line(edge, 2 * ow + 22, "gold")
-    t.line(edge, 2 * ow + 8, "gold_l")
+    t.line(top, 2 * ow + 24 + 34, "blue_l")
+    t.line(edge, 2 * ow + 24, "gold")
+    t.line(edge, 2 * ow + 10, "gold_l")
     ring = Layer()
     ring.line(poly + [poly[0]], 2 * ow, "ink", closed=True)
     rl = ring.labels()
@@ -546,19 +579,64 @@ def cape(stage, layer, ow):
     layer.d = ImageDraw.Draw(layer.im)
 
 
+# far hind leg (seen between the near legs): its dark-brown shading turns muddy once the legs stretch
+FAR_LEG = [(412, 772), (486, 772), (486, 892), (412, 892)]
+# scarf knot on the left of the neck (reference px): upper flap, hanging end, knot
+KNOT_FLAP = [(478, 626), (450, 612), (420, 604), (392, 604), (370, 612)]
+KNOT_END = [(472, 640), (472, 660), (468, 676), (462, 690)]
+KNOT_CLEAR = [(400, 646), (468, 646), (480, 700), (400, 700)]   # where the original hanging end was
+
+
+def far_leg(stage, lbl):
+    relabel(lbl, "fur_dd", "fur_d", ref_poly(stage, FAR_LEG))
+
+
+def scarf_knot(stage, lbl, ow):
+    """Redraw the knot as clean cel-shaded shapes over the original (its many ink folds turn to mud when small)."""
+    blue = ("blue_d", "blue", "blue_l", None)
+    old = ref_poly(stage, KNOT_CLEAR)
+    relabel(lbl, list(SCARF_NAMES) + ["ink"], "fur", old)
+    relabel(lbl, "fur_dd", "fur_d", old)          # the old knot's cast shadow
+    flap = curve([P(stage, *q) for q in KNOT_FLAP], 32)
+    end = curve([P(stage, *q) for q in KNOT_END], 24)
+    parts = [flame_parts(end, lambda t: 40 - 12 * t, blue, light=(0.1, 0.7), dark=0.4),
+             flame_parts(flap, lambda t: 66 - 58 * t ** 1.4, blue, light=(0.25, 0.85), dark=0.45),
+             [(dk_ellipse(P(stage, 470, 630), 24, 30), "blue"),
+              (dk_ellipse(P(stage, 462, 640), 14, 18), "blue_d")]]
+    lay = Layer()
+    lay.parts(parts, ow)
+    over(lbl, lay.labels())
+
+
+def dk_ellipse(c, rx, ry, n=28):
+    cx, cy = c
+    return [(cx + rx * np.cos(a), cy + ry * np.sin(a)) for a in np.linspace(0, 2 * np.pi, n, endpoint=False)]
+
+
+def clean_stage1_antlers(lbl):
+    """Inside the original antlers every non-ink label becomes plain antler gold (shaded later per pixel)."""
+    m = ref_poly(1, ERASE_L) | ref_poly(1, ERASE_R)
+    m &= ~ref_poly(1, [(505, 290), (560, 290), (560, 360), (512, 360)])   # forehead right of the near antler
+    m &= (lbl >= 0) & (lbl != K_INK)
+    lbl[m] = L("ant")
+
+
 def compose(stage, img, ctx):
     img = stretch_legs(img, stage)
     lbl = base_labels(stage, img)
     ow = OW[stage]
     st = {"lbl": lbl}
     _STATE[stage] = st
+    far_leg(stage, lbl)
     if stage == 1:
+        clean_stage1_antlers(lbl)
+        scarf_knot(stage, lbl, ow)
         return render(lbl, palette(stage))
 
     erase_old_antlers(stage, lbl)
     spec = ANTLER[stage]
     cols = "ant"
-    tip = "ant_hi" if stage == 3 else None
+    tip = "aqua" if stage == 3 else None
     (bl, sl), (br, sr) = ANT_POS[stage]["l"], ANT_POS[stage]["r"]
     pl, ll = antler(P(stage, *bl), -1, sl, spec, cols, tip=tip)
     pr, lr = antler(P(stage, *br), +1, sr, spec, cols, tip=tip)
@@ -566,32 +644,37 @@ def compose(stage, img, ctx):
     st["lines"] = {-1: ll, 1: lr}
     back, front = Layer(), Layer()
 
-    # --- behind the body: scarf ribbons, tail plume, far antler
+    # --- behind the body: scarf tails (stage 2) or cape (stage 3), then both antlers
     blue = ("blue", "blue_d", "blue_l")
     if stage == 2:
-        rib = [ribbon(curve([P(stage, *q) for q in [(436, 652), (350, 650), (300, 720), (205, 680)]]), 46, blue,
-                      trim=("gold", "gold_l"), twist=0.55),
-               ribbon(curve([P(stage, *q) for q in [(440, 630), (350, 548), (290, 620), (190, 545)]]), 54, blue,
-                      trim=("gold", "gold_l"))]
-        back.parts(rib, ow)
+        # two long scarf tails stream back from under the knot, above the back and in front of the deer's tail
+        rib = [streamer(spline([P(stage, *q) for q in RIBBONS[0]], 72), 58, 50),
+               streamer(spline([P(stage, *q) for q in RIBBONS[1]], 72), 54, 46)]
+        rl = Layer()
+        rl.parts(rib[::-1], ow)
+        rl = rl.labels()
+        front_of_tail = ref_poly(stage, TAIL_TOP) & (rl >= 0)
+        lbl[front_of_tail] = rl[front_of_tail]
+        under(lbl, rl)
     else:
-        cape(stage, back, ow)
-    if stage == 3:
-        plume = [flame_parts(*lock(P(stage, *b), P(stage, *t), bd, w), ("glow", "white", "white", None))
-                 for b, t, bd, w in [((340, 700), (262, 548), -0.2, 76), ((335, 720), (215, 628), -0.14, 70),
-                                     ((335, 735), (226, 712), 0.05, 56)]]
-        back.parts(plume, ow)
+        capel = Layer()
+        cape(stage, capel, ow)
+        cl = capel.labels()
+        # the cape is fastened by a clasp (painted per pixel): it covers the old bow, and sits behind the body
+        bow = ref_poly(stage, BOW_AREA) & (cl >= 0)
+        lbl[bow] = cl[bow]
+        under(lbl, cl)
     back.parts(pr, ow)
     back.parts(pl, ow)
     head_patch(stage, lbl, ow)
 
     # --- stage 2 buds (lộc non) on both antlers
     if stage == 2:
-        for side, li, t, ang, ln in LEAVES:
-            q = at(st["lines"][side][li], t)
-            a0 = ang if side < 0 else 180 - ang
-            (front if side < 0 else back).parts([leaf(q, a0, ln, 34)], ow)
-        st["blossoms"] = [at(st["lines"][side][li], t) for side, li, t in BLOSSOMS]
+        for side in (-1, 1):
+            sc = ANT_POS[stage]["l" if side < 0 else "r"][1]
+            for li, t, ang, ln in LEAVES:
+                q = at(st["lines"][side][li], t)
+                back.parts([leaf(q, ang if side < 0 else 180 - ang, ln * sc, 30 * sc)], ow)
 
     under(lbl, back.labels())
     over(lbl, front.labels())
@@ -604,12 +687,21 @@ def compose(stage, img, ctx):
     tl_ = trim.labels()
     scarf = np.isin(lbl, [L(n) for n in SCARF_NAMES])
     lbl[scarf & (tl_ >= 0)] = tl_[scarf & (tl_ >= 0)]
+    if stage == 2:
+        scarf_knot(stage, lbl, ow)
+    else:
+        relabel(lbl, list(SCARF_NAMES) + ["ink", "fur_dd"], "fur", ref_poly(stage, KNOT_CLEAR))
 
     if stage == 3:
-        # aura ruff of light on the chest, tucked under the scarf
+        # a fluffy chest mane with glowing tips, tucked under the scarf: fur fills only, no ink, so it grows out of
+        # the chest fluff instead of sitting on it (touchup still outlines it where it meets the background)
         ruff = Layer()
-        ruff.parts([flame_parts(*lock(P(stage, *b), P(stage, *t), bd, w), ("cream", "white", "white", None),
-                                dark=0.4, tip=("glow", "gold_l")) for b, t, bd, w in RUFF], ow)
+        tufts = [flame_parts(*lock(P(stage, *b), P(stage, *t), bd, w), ("cream", "white", "white", None),
+                             dark=0.38, tip=("glow", "gold_l"), tip_from=0.8) for b, t, bd, w in RUFF]
+        for depth in range(max(len(p) for p in tufts)):
+            for p in tufts:
+                if depth < len(p):
+                    ruff.poly(*p[depth])
         rl = ruff.labels()
         keep = np.isin(lbl, [L(n) for n in SCARF_NAMES + ("gold", "gold_l")])
         m = (rl >= 0) & ~keep
@@ -746,8 +838,45 @@ def clean_eye(stage, art, ctx, key):
     big = (u / ex) ** 2 + (v / 1.14) ** 2 <= 1.0
     junk = np.isin(art.idx, [art.names["outline"]] + [art.color(n) for n in EYE_JUNK])
     art.idx[big & junk & ~full] = art.color("cream")
+    # the original's dark under-eye shading leaves brown specks on the cheek
+    cheek = ((u / 1.2) ** 2 + (v / 1.35) ** 2 <= 1.0) & (v > 0.35) & (np.abs(u) < 1.05) & ~full
+    art.idx[cheek & np.isin(art.idx, [art.color(n) for n in ("fur_dd", "fur_d")])] = art.color("cream")
+    art.idx[cheek & (inner > -0.5) & (art.idx == art.color("fur"))] = art.color("cream")
     art.idx[full] = art.color("cream")
     return cx, cy, rx, ry
+
+
+def separate(art, family, p0, p1):
+    """Inside the box p0..p1 (sprite px), fur pixels touching a `family` colour (e.g. the cape blues) become outline,
+    so a cloth laid over the body keeps a 1px edge."""
+    x0, y0 = int(p0[0]), int(p0[1])
+    x1, y1 = int(p1[0]) + 1, int(p1[1]) + 1
+    idx = art.idx
+    cloth = np.zeros(idx.shape, bool)
+    for n in [m for m in NAMES if m.startswith(family)] + ["gold", "gold_l"]:
+        cloth |= idx == art.color(n)
+    fur = np.isin(idx, [art.color(n) for n in ("fur_dd", "fur_d", "fur", "fur_l", "cream_d", "cream", "white")])
+    hit = fur & adj4(cloth)
+    box = np.zeros(idx.shape, bool)
+    box[y0:y1, x0:x1] = True
+    idx[hit & box] = art.names["outline"]
+
+
+def lone_pixels(art, box, names=("fur", "fur_d", "fur_dd", "fur_l", "cream_d", "white", "cream")):
+    """A pixel whose four neighbours all share another colour takes that colour (inside box, listed colours)."""
+    x0, y0, x1, y1 = box
+    idx = art.idx
+    cand = {art.color(n) for n in names}
+    for y in range(max(1, y0), min(idx.shape[0] - 1, y1)):
+        for x in range(max(1, x0), min(idx.shape[1] - 1, x1)):
+            c = idx[y, x]
+            if c not in cand:
+                continue
+            nb = {idx[y - 1, x], idx[y + 1, x], idx[y, x - 1], idx[y, x + 1]}
+            if len(nb) == 1:
+                n = nb.pop()
+                if n != c and n != TRANSPARENT and n != art.names["outline"]:
+                    idx[y, x] = n
 
 
 def lash_pixels(stage, cx, cy, rx, ry):
@@ -812,7 +941,7 @@ def paint_eye(stage, art, ctx, key):
 
 FONT = {
     "I": ["#", "#", "#", "#", "#"],
-    "Q": [".#.", "#.#", "#.#", "#.#", ".##"],
+    "Q": [".##.", "#..#", "#..#", "#.#.", ".#.#"],
     "X": ["#.#", "#.#", ".#.", "#.#", "#.#"],
 }
 FONT_BIG = {
@@ -876,51 +1005,43 @@ def star(art, x, y, big=False):
             art.put(x + dx, y + dy, "gold_l")
 
 
-def paint_orb(art, x, y):
-    """Glowing orb at an antler tip: outlined 7x7 disc with a white core and sparkle rays."""
-    k = art.names["outline"]
-    rows = ["..###..",
-            ".#lll#.",
-            "#lgggl#",
-            "#lgwgl#",
-            "#lgggl#",
-            ".#lll#.",
-            "..###.."]
-    art.blit(x - 3, y - 3, rows, {"#": k, "l": "gold_l", "g": "glow", "w": "white"})
-    art.put(x - 1, y - 1, "white")
-
-
 def paint_third_eye(art, cx, cy):
-    """Thiên Nhãn: a vertical gem-eye on the forehead, gold lids, IQX-blue iris, slit pupil."""
-    rows = ["...#...",
-            "..#l#..",
-            ".#lgl#.",
-            "#gbBbg#",
-            "#bBkwb#",
-            "#bBkBb#",
-            "#bbkBb#",
-            "#gbbbg#",
-            ".#ggg#.",
-            "..#g#..",
-            "...#..."]
+    """Thiên Nhãn: a vertical eye on the forehead in a gold diamond frame, IQX-blue iris, slit pupil."""
+    rows = [".....#.....",
+            "....#l#....",
+            "...#lgd#...",
+            "..#g###d#..",
+            ".#g#bBb#d#.",
+            "#g#bBwBb#d#",
+            "#l#bBkBb#d#",
+            "#g#bBkBb#d#",
+            ".#g#bkb#d#.",
+            "..#g###d#..",
+            "...#gdd#...",
+            "....#d#....",
+            ".....#....."]
     k = art.names["outline"]
-    key = {"#": k, "g": "gold", "l": "gold_l", "b": "blue", "B": "blue_l", "k": k, "w": "white"}
-    art.blit(cx - 3, cy - 5, rows, key)
+    key = {"#": k, "g": "gold", "l": "gold_l", "d": "gold_d", "b": "blue", "B": "blue_l", "k": k, "w": "white"}
+    art.blit(cx - 5, cy - 6, rows, key)
 
 
-def paint_blossom(art, x, y):
-    """Five-petal blossom (hoa đào) for the stage 2 antlers."""
-    rows = [".##.##.",
-            "#pp#pp#",
-            "#pdcdp#",
-            ".#ccc#.",
-            "#pdcdp#",
-            "#pp#pp#",
-            ".##.##."]
-    art.blit(x - 3, y - 3, rows, {"#": art.names["outline"], "p": "petal", "d": "petal_d", "c": "gold_l"})
+def paint_clasp(art, cx, cy):
+    """Stage 3 cape clasp: a round gold brooch with an IQX-blue cabochon."""
+    rows = ["..#####..",
+            ".#lllgg#.",
+            "#llbbbgd#",
+            "#lbwBBbd#",
+            "#lbBBBbd#",
+            "#gbBBBbd#",
+            "#ggbbbdd#",
+            ".#gdddd#.",
+            "..#####.."]
+    k = art.names["outline"]
+    art.blit(cx - 4, cy - 4, rows, {"#": k, "l": "gold_l", "g": "gold", "d": "gold_d", "b": "blue",
+                                     "B": "blue_l", "w": "white"})
 
 
-SPARKLES = [(300, 90), (868, 300), (150, 330)]
+SPARKLES = [(4, -7, -6), (9, 7, -8)]      # (antler tip index, dx, dy) in sprite px
 SPOTS = [(395, 693), (412, 711), (372, 717), (333, 738), (392, 730), (352, 700), (430, 735), (447, 705), (318, 715)]
 
 
@@ -938,8 +1059,10 @@ def paint_spots(stage, art, ctx):
             for dx, dy in ((0, 0), (1, 0), (0, 1), (1, 1)):
                 art.put(px + dx, py + dy, "glow")
             art.put(px, py, "white")
-        else:
-            star(art, px, py, big=(i % 3 == 0))
+        elif i in (0, 3, 6):
+            star(art, px, py)
+        elif i in (1, 4, 8):
+            art.put(px, py, "white")
 
 
 def shade_material(art, mat, dark, light, spec=None, solid=()):
@@ -979,14 +1102,11 @@ MOUTH = {
         ".##ttt##.",
         "..#ttt#..",
         "...###..."],
-    3: ["....nnn....",
-        ".....#.....",
-        ".....#.....",
-        "#..#####..#",
-        ".##rrrrr##.",
-        "..#rtttr#..",
-        "...#ttt#...",
-        "....###...."],
+    3: ["...nnn...",          # calm, closed 'ω' smile: the divine form no longer grins
+        "....#....",
+        "....#....",
+        "#..#.#..#",
+        ".##...##."],
 }
 NOSE = (634, 524)      # reference px, nose centre
 
@@ -999,7 +1119,7 @@ def paint_mouth(stage, art, ctx):
     w, h = len(rows[0]), len(rows)
     k = art.names["outline"]
     for n in (k, "nose", "mouth", "pink", "cream_d"):
-        art.replace(n, "white", (x0 - 2, y0, x0 + w + 1, y0 + h + 3))
+        art.replace(n, "white", (x0 - 2, y0, x0 + max(w, 11) + 1, y0 + max(h, 8) + 3))
     art.blit(x0, y0, rows, {"n": "nose", "#": k, "t": "mouth", "r": "nose"})
 
 
@@ -1009,24 +1129,24 @@ def to_px(ctx, q):
 
 
 # --------------------------------------------------------------- touchup ----
-# --------------------------------------------------------------- touchup ----
 def touchup(stage, art, ctx):
     repaint(stage, art, ctx)
     outline_pass(art)
     despeckle(art, 3)
     peel(art)
+    lone_pixels(art, (0, 0, gk.CANVAS, gk.CANVAS))
     st = _STATE[stage]
-    if stage >= 2:
-        if stage == 3:
-            shade_material(art, "ant_hi", "ant_l", "white", solid=("ant",))
-            shade_material(art, "ant", "ant_d", "ant_l", spec="ant_hi", solid=("ant_hi", "ant_l", "white"))
-        else:
-            shade_material(art, "ant", "ant_d", "ant_l", spec="ant_hi")
+    if stage == 3:
+        shade_material(art, "aqua", "aqua_d", "white", solid=("ant",))
+        shade_material(art, "ant", "ant_d", "ant_l", spec="ant_hi", solid=("aqua", "aqua_d", "white"))
     else:
         shade_material(art, "ant", "ant_d", "ant_l", spec="ant_hi")
     for key in ("l", "r"):
         paint_eye(stage, art, ctx, key)
     paint_mouth(stage, art, ctx)
+    fx0, fy0 = sp(stage, ctx, 430, 420)
+    fx1, fy1 = sp(stage, ctx, 740, 600)
+    lone_pixels(art, (int(fx0), int(fy0), int(fx1) + 1, int(fy1) + 1))
     paint_text(stage, art)
     gx, gy = sp(stage, ctx, 595, 716)
     if stage == 1:
@@ -1039,24 +1159,30 @@ def touchup(stage, art, ctx):
     art.replace("hoof_l", "hoof")
     paint_spots(stage, art, ctx)
     if stage == 2:
-        for q in st.get("blossoms", []):
-            paint_blossom(art, *to_px(ctx, q))
+        pass
     if stage == 3:
-        for i, q in enumerate(st["tips"]):
-            x, y = to_px(ctx, q)
-            paint_orb(art, x, y)
-        for x, y in CAPE_STARS:
+        for x, y, big in CAPE_STARS:
             fx, fy = sp(stage, ctx, x, y)
             px, py = int(fx), int(fy)
-            if art.idx[py, px] in (art.color("blue"), art.color("blue_d"), art.color("blue_l")):
-                star(art, px, py, big=False)
+            near = art.idx[py - 1:py + 2, px - 1:px + 2]
+            if np.isin(near, [art.color("blue"), art.color("blue_d"), art.color("blue_l")]).all():
+                if big:
+                    star(art, px, py)
+                else:
+                    art.put(px, py, "white")
         fx, fy = sp(stage, ctx, 582, 352)
-        paint_third_eye(art, int(fx), int(fy))
-        # floating motes of light around the antlers and cape
-        for x, y in SPARKLES:
-            fx, fy = sp(stage, ctx, x, y)
-            if (art.idx[int(fy) - 2:int(fy) + 3, int(fx) - 2:int(fx) + 3] == TRANSPARENT).all():
-                star(art, int(fx), int(fy), big=True)
+        # the original's white forehead blaze would crowd the third eye: soften it to light fur
+        art.replace("white", "fur_l", (int(fx) - 8, int(fy) - 6, int(fx) + 8, int(fy) + 10))
+        paint_third_eye(art, int(fx), int(fy) + 2)
+        separate(art, "blue", sp(stage, ctx, 360, 580), sp(stage, ctx, 490, 680))
+        fx, fy = sp(stage, ctx, *CLASP)
+        paint_clasp(art, int(fx), int(fy))
+        # twinkles of light off the two outermost crystal tips
+        for i, dx, dy in SPARKLES:
+            x, y = to_px(ctx, st["tips"][i])
+            x, y = x + dx, max(2, y + dy)
+            if (art.idx[y - 2:y + 3, x - 2:x + 3] == TRANSPARENT).all():
+                star(art, x, y, big=True)
 
 
 def blink(stage, art, ctx):
@@ -1088,3 +1214,6 @@ def blink(stage, art, ctx):
         else:
             xe, ye = pts[-1]
             art.put(xe + 1, ye - 1, k)
+    fx0, fy0 = sp(stage, ctx, 430, 420)
+    fx1, fy1 = sp(stage, ctx, 740, 600)
+    lone_pixels(art, (int(fx0), int(fy0), int(fx1) + 1, int(fy1) + 1))
