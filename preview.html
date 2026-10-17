@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IQX Pixel Pets</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --line: #e3e6ea; --text: #16181d; --muted: #6b7280;
+    --accent: #1d4ed8; --accent-soft: #e8efff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1115; --card: #171a21; --line: #2a2f39; --text: #eef0f3; --muted: #9aa3af;
+            --accent: #7aa2ff; --accent-soft: #1c2640; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+           max-width: 1120px; margin: 0 auto; padding: 24px 16px 8px; }
+  h1 { font-size: 20px; margin: 0; }
+  h1 small { color: var(--muted); font-weight: 500; margin-left: 8px; }
+  .seg { display: inline-flex; background: var(--line); border-radius: 10px; padding: 3px; }
+  .seg button { border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 600;
+                padding: 6px 14px; border-radius: 8px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--card); color: var(--text); box-shadow: 0 1px 2px #0002; }
+  main { max-width: 1120px; margin: 0 auto; padding: 8px 16px 40px;
+         display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .stage { aspect-ratio: 1; display: grid; place-items: center;
+           background: radial-gradient(circle at 50% 40%, var(--accent-soft), transparent 70%); }
+  .stage img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+  .meta { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px;
+          border-top: 1px solid var(--line); }
+  .meta b { font-size: 16px; }
+  .meta span { color: var(--muted); font-size: 13px; }
+  .meta a { color: var(--accent); font-weight: 600; text-decoration: none; font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Linh thú IQX <small>pixel 512×512</small></h1>
+  <div class="seg" role="group" aria-label="Phiên bản">
+    <button type="button" data-mode="pixel" aria-pressed="true">Pixel</button>
+    <button type="button" data-mode="ref" aria-pressed="false">Bản gốc</button>
+  </div>
+</header>
+<main id="grid"></main>
+<script>
+  const PETS = [
+    ["thanh-long", "Thanh Long"],
+    ["loc-huou", "Lộc Hươu"],
+    ["phung-hoang", "Phụng Hoàng"],
+    ["kim-quy", "Kim Quy"],
+  ];
+  const src = (slug, mode) => mode === "ref" ? `reference/${slug}.webp` : `sprites/${slug}.png`;
+  const grid = document.getElementById("grid");
+  grid.innerHTML = PETS.map(([slug, name]) => `
+    <article class="card">
+      <div class="stage"><img data-slug="${slug}" src="${src(slug, "pixel")}" alt="${name}"></div>
+      <div class="meta"><div><b>${name}</b><br><span>512×512 px</span></div>
+        <a href="sprites/${slug}.png" download>Tải PNG</a></div>
+    </article>`).join("");
+  document.querySelectorAll(".seg button").forEach((btn) => btn.addEventListener("click", () => {
+    document.querySelectorAll(".seg button").forEach((b) => b.setAttribute("aria-pressed", b === btn));
+    document.querySelectorAll("img[data-slug]").forEach((img) => { img.src = src(img.dataset.slug, btn.dataset.mode); });
+  }));
+</script>
+</body>
+</html>
